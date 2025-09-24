@@ -41,7 +41,7 @@
 </div>
 
 <div class="row">
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="card">
             <div class="card-header">
                 <h5>Sell a Room</h5>
@@ -57,7 +57,23 @@
             </div>
         </div>
     </div>
-    <div class="col-md-6">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Restore a Room</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('restore_room') }}">
+                    <div class="mb-3">
+                        <label for="restore_room_number" class="form-label">Room Number</label>
+                        <input type="number" class="form-control" id="restore_room_number" name="room_number" min="1" required>
+                    </div>
+                    <button type="submit" class="btn btn-info w-100">Mark as Available</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
         <div class="card">
             <div class="card-header">
                 <h5>Record Expense</h5>
@@ -89,6 +105,30 @@
                 <div class="d-grid gap-2 d-md-flex">
                     <a href="{{ url_for('reports') }}" class="btn btn-outline-info me-md-2">View My Reports History</a>
                     <a href="{{ url_for('expenses') }}" class="btn btn-outline-warning">View My Expenses</a>
+                    <a href="{{ url_for('rooms') }}" class="btn btn-outline-primary">View All Rooms</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Room Status Legend</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <span class="badge bg-success">Available</span> - Room is ready for new clients
+                    </div>
+                    <div class="col-md-4">
+                        <span class="badge bg-warning">Sold</span> - Room is currently occupied
+                    </div>
+                    <div class="col-md-4">
+                        <span class="badge bg-info">Restored</span> - Room was occupied and now available again
+                    </div>
                 </div>
             </div>
         </div>

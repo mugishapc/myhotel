@@ -126,8 +126,8 @@ def sell_room():
         # Record the sale
         today = date.today().isoformat()
         conn.execute(
-            'INSERT INTO sales (room_id, gestionnaire_id, date, price) VALUES (?, ?, ?, ?)',
-            (room['room_id'], session['user_id'], today, room['price'])
+            'INSERT INTO sales (room_id, gestionnaire_id, date, price, status) VALUES (?, ?, ?, ?, ?)',
+            (room['room_id'], session['user_id'], today, room['price'], 'active')
         )
         
         conn.commit()
@@ -136,6 +136,51 @@ def sell_room():
     else:
         conn.close()
         flash(f'Room {room_number} not available or does not exist.', 'danger')
+    
+    return redirect(url_for('dashboard'))
+
+@app.route('/restore_room', methods=['POST'])
+@login_required(role='gestionnaire')
+def restore_room():
+    room_number = request.form['room_number']
+    
+    conn = get_db_connection()
+    
+    # Check if room exists and is sold
+    room = conn.execute(
+        'SELECT * FROM rooms WHERE room_number = ? AND status = "sold"',
+        (room_number,)
+    ).fetchone()
+    
+    if room:
+        # Check if there's an active sale for this room by the current gestionnaire
+        active_sale = conn.execute(
+            'SELECT * FROM sales WHERE room_id = ? AND gestionnaire_id = ? AND status = "active"',
+            (room['room_id'], session['user_id'])
+        ).fetchone()
+        
+        if active_sale:
+            # Mark room as available
+            conn.execute(
+                'UPDATE rooms SET status = "available" WHERE room_number = ?',
+                (room_number,)
+            )
+            
+            # Update the sale status to 'restored'
+            conn.execute(
+                'UPDATE sales SET status = "restored", restore_date = ? WHERE id = ?',
+                (date.today().isoformat(), active_sale['id'])
+            )
+            
+            conn.commit()
+            conn.close()
+            flash(f'Room {room_number} restored successfully! Clients have left the room.', 'success')
+        else:
+            conn.close()
+            flash(f'No active sale found for room {room_number} under your account.', 'danger')
+    else:
+        conn.close()
+        flash(f'Room {room_number} is not sold or does not exist.', 'danger')
     
     return redirect(url_for('dashboard'))
 
@@ -255,34 +300,64 @@ def reports():
     conn = get_db_connection()
     
     # Get sales data
-    sales = conn.execute('''
-        SELECT s.*, r.room_number, u.name as gestionnaire_name 
-        FROM sales s 
-        JOIN rooms r ON s.room_id = r.room_id 
-        JOIN users u ON s.gestionnaire_id = u.id 
-        WHERE s.date BETWEEN ? AND ?
-        ORDER BY s.date DESC
-    ''', (start_date, end_date)).fetchall()
+    if session['role'] == 'admin':
+        sales = conn.execute('''
+            SELECT s.*, r.room_number, u.name as gestionnaire_name 
+            FROM sales s 
+            JOIN rooms r ON s.room_id = r.room_id 
+            JOIN users u ON s.gestionnaire_id = u.id 
+            WHERE s.date BETWEEN ? AND ?
+            ORDER BY s.date DESC
+        ''', (start_date, end_date)).fetchall()
+    else:
+        sales = conn.execute('''
+            SELECT s.*, r.room_number, u.name as gestionnaire_name 
+            FROM sales s 
+            JOIN rooms r ON s.room_id = r.room_id 
+            JOIN users u ON s.gestionnaire_id = u.id 
+            WHERE s.gestionnaire_id = ? AND s.date BETWEEN ? AND ?
+            ORDER BY s.date DESC
+        ''', (session['user_id'], start_date, end_date)).fetchall()
     
     # Get expenses data
-    expenses = conn.execute('''
-        SELECT e.*, u.name as gestionnaire_name 
-        FROM expenses e 
-        JOIN users u ON e.gestionnaire_id = u.id 
-        WHERE e.date BETWEEN ? AND ?
-        ORDER BY e.date DESC
-    ''', (start_date, end_date)).fetchall()
+    if session['role'] == 'admin':
+        expenses = conn.execute('''
+            SELECT e.*, u.name as gestionnaire_name 
+            FROM expenses e 
+            JOIN users u ON e.gestionnaire_id = u.id 
+            WHERE e.date BETWEEN ? AND ?
+            ORDER BY e.date DESC
+        ''', (start_date, end_date)).fetchall()
+    else:
+        expenses = conn.execute('''
+            SELECT e.*, u.name as gestionnaire_name 
+            FROM expenses e 
+            JOIN users u ON e.gestionnaire_id = u.id 
+            WHERE e.gestionnaire_id = ? AND e.date BETWEEN ? AND ?
+            ORDER BY e.date DESC
+        ''', (session['user_id'], start_date, end_date)).fetchall()
     
     # Calculate totals
-    total_income = conn.execute(
-        'SELECT SUM(price) FROM sales WHERE date BETWEEN ? AND ?',
-        (start_date, end_date)
-    ).fetchone()[0] or 0
-    
-    total_expenses = conn.execute(
-        'SELECT SUM(amount) FROM expenses WHERE date BETWEEN ? AND ?',
-        (start_date, end_date)
-    ).fetchone()[0] or 0
+    if session['role'] == 'admin':
+        total_income = conn.execute(
+            'SELECT SUM(price) FROM sales WHERE date BETWEEN ? AND ?',
+            (start_date, end_date)
+        ).fetchone()[0] or 0
+        
+        total_expenses = conn.execute(
+            'SELECT SUM(amount) FROM expenses WHERE date BETWEEN ? AND ?',
+            (start_date, end_date)
+        ).fetchone()[0] or 0
+    else:
+        total_income = conn.execute(
+            'SELECT SUM(price) FROM sales WHERE gestionnaire_id = ? AND date BETWEEN ? AND ?',
+            (session['user_id'], start_date, end_date)
+        ).fetchone()[0] or 0
+        
+        total_expenses = conn.execute(
+            'SELECT SUM(amount) FROM expenses WHERE gestionnaire_id = ? AND date BETWEEN ? AND ?',
+            (session['user_id'], start_date, end_date)
+        ).fetchone()[0] or 0
     
     net_profit = total_income - total_expenses
     

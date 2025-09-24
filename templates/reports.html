@@ -83,6 +83,7 @@
                         <th>Room Number</th>
                         <th>Gestionnaire</th>
                         <th>Price (BIF)</th>
+                        <th>Status</th>
                         {% if session.role == 'admin' %}
                         <th>Actions</th>
                         {% endif %}
@@ -95,6 +96,14 @@
                         <td>{{ sale.room_number }}</td>
                         <td>{{ sale.gestionnaire_name }}</td>
                         <td>{{ "BIF{:,.0f}".format(sale.price) }}</td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if sale.status == 'restored' else 'warning' if sale.status == 'active' else 'secondary' }}">
+                                {{ sale.status|title }}
+                                {% if sale.restore_date %}
+                                <br><small>Restored: {{ sale.restore_date }}</small>
+                                {% endif %}
+                            </span>
+                        </td>
                         {% if session.role == 'admin' %}
                         <td>
                             <a href="{{ url_for('delete_report', report_type='sale', report_id=sale.id) }}" 

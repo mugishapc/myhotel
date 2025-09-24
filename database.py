@@ -1,4 +1,5 @@
 import sqlite3
+import os
 from datetime import datetime
 
 def init_db():
@@ -25,7 +26,7 @@ def init_db():
         )
     ''')
     
-    # Sales table
+    # Sales table (updated with status and restore_date)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sales (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,6 +34,8 @@ def init_db():
             gestionnaire_id INTEGER NOT NULL,
             date TEXT NOT NULL,
             price REAL NOT NULL,
+            status TEXT DEFAULT 'active',
+            restore_date TEXT,
             FOREIGN KEY (room_id) REFERENCES rooms (room_id),
             FOREIGN KEY (gestionnaire_id) REFERENCES users (id)
         )
@@ -49,6 +52,20 @@ def init_db():
             FOREIGN KEY (gestionnaire_id) REFERENCES users (id)
         )
     ''')
+    
+    # Check if the status column exists in sales table, if not, add it
+    try:
+        cursor.execute("SELECT status FROM sales LIMIT 1")
+    except sqlite3.OperationalError:
+        # Add the status column if it doesn't exist
+        cursor.execute('ALTER TABLE sales ADD COLUMN status TEXT DEFAULT "active"')
+    
+    # Check if the restore_date column exists in sales table, if not, add it
+    try:
+        cursor.execute("SELECT restore_date FROM sales LIMIT 1")
+    except sqlite3.OperationalError:
+        # Add the restore_date column if it doesn't exist
+        cursor.execute('ALTER TABLE sales ADD COLUMN restore_date TEXT')
     
     # Check if admin user exists
     cursor.execute("SELECT * FROM users WHERE name='Crescent'")
@@ -74,6 +91,9 @@ def init_db():
                 "INSERT INTO rooms (room_number, price) VALUES (?, ?)",
                 (i, 50000 if i <= 25 else 75000)  # Different prices for different rooms
             )
+    
+    # Update existing sales records to have status 'active' if they don't have it
+    cursor.execute("UPDATE sales SET status = 'active' WHERE status IS NULL")
     
     conn.commit()
     conn.close()
