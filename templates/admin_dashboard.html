@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Crescent's Dashboard{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Crescent's Dashboard</h2>
+
+<div class="row">
+    <div class="col-md-3 mb-4">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h5 class="card-title">Total Rooms</h5>
+                <h2 class="card-text">{{ stats.total_rooms }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title">Available Rooms</h5>
+                <h2 class="card-text">{{ stats.available_rooms }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <h5 class="card-title">Rooms Sold</h5>
+                <h2 class="card-text">{{ stats.sold_rooms }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <h5 class="card-title">Occupancy Rate</h5>
+                <h2 class="card-text">{{ "%.1f"|format((stats.sold_rooms / stats.total_rooms * 100) if stats.total_rooms > 0 else 0) }}%</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title">Today's Income</h5>
+                <h2 class="card-text">{{ "BIF{:,.0f}".format(stats.today_income) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <h5 class="card-title">Today's Expenses</h5>
+                <h2 class="card-text">{{ "BIF{:,.0f}".format(stats.today_expenses) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-{{ 'success' if stats.profit >= 0 else 'danger' }}">
+            <div class="card-body">
+                <h5 class="card-title">Today's Profit</h5>
+                <h2 class="card-text">{{ "BIF{:,.0f}".format(stats.profit) }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('rooms') }}" class="btn btn-outline-primary">Manage Rooms</a>
+                    <a href="{{ url_for('reports') }}" class="btn btn-outline-info">View Reports</a>
+                    <a href="{{ url_for('users') }}" class="btn btn-outline-success">Manage Users</a>
+                    <a href="{{ url_for('add_user') }}" class="btn btn-outline-warning">Add User</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Recent Activity</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Check the Reports section for detailed activity logs.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

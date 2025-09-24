@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}My Reports{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">My Reports History</h2>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Filter My Reports</h5>
+    </div>
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="period" class="form-label">Period</label>
+                <select class="form-select" id="period" name="period" onchange="this.form.submit()">
+                    <option value="today" {% if period == 'today' %}selected{% endif %}>Today</option>
+                    <option value="week" {% if period == 'week' %}selected{% endif %}>Last 7 Days</option>
+                    <option value="month" {% if period == 'month' %}selected{% endif %}>Last 30 Days</option>
+                    <option value="custom" {% if period == 'custom' %}selected{% endif %}>Custom Range</option>
+                </select>
+            </div>
+            {% if period == 'custom' %}
+            <div class="col-md-3">
+                <label for="start_date" class="form-label">Start Date</label>
+                <input type="date" class="form-control" id="start_date" name="start_date" value="{{ start_date }}">
+            </div>
+            <div class="col-md-3">
+                <label for="end_date" class="form-label">End Date</label>
+                <input type="date" class="form-control" id="end_date" name="end_date" value="{{ end_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn btn-primary w-100">Apply Filter</button>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title">My Total Income</h5>
+                <h2 class="card-text">{{ "BIF{:,.0f}".format(total_income) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <h5 class="card-title">My Total Expenses</h5>
+                <h2 class="card-text">{{ "BIF{:,.0f}".format(total_expenses) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-{{ 'success' if net_profit >= 0 else 'danger' }}">
+            <div class="card-body">
+                <h5 class="card-title">My Net Profit</h5>
+                <h2 class="card-text">{{ "BIF{:,.0f}".format(net_profit) }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>My Sales History</h5>
+            </div>
+            <div class="card-body">
+                {% if sales %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Room</th>
+                                <th>Amount (BIF)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sale in sales %}
+                            <tr>
+                                <td>{{ sale.date }}</td>
+                                <td>{{ sale.room_number }}</td>
+                                <td>{{ "BIF{:,.0f}".format(sale.price) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No sales records found for this period.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>My Expenses History</h5>
+            </div>
+            <div class="card-body">
+                {% if expenses %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Reason</th>
+                                <th>Amount (BIF)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for expense in expenses %}
+                            <tr>
+                                <td>{{ expense.date }}</td>
+                                <td>{{ expense.reason }}</td>
+                                <td>{{ "BIF{:,.0f}".format(expense.amount) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No expense records found for this period.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

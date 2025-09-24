@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Expenses{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Expenses</h2>
+
+<div class="card">
+    <div class="card-header">
+        <h5>All Expenses</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Gestionnaire</th>
+                        <th>Reason</th>
+                        <th>Amount (BIF)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for expense in expenses %}
+                    <tr>
+                        <td>{{ expense.date }}</td>
+                        <td>{{ expense.gestionnaire_name }}</td>
+                        <td>{{ expense.reason }}</td>
+                        <td>{{ "BIF{:,.0f}".format(expense.amount) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
