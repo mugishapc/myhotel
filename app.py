@@ -1,14 +1,30 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file
 from database import init_db, get_db_connection
 from datetime import datetime, date, timedelta
 import functools
 import sqlite3
+import csv
+import io
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+import os
 
 app = Flask(__name__)
 app.secret_key = 'd29c234ca310aa6990092d4b6cd4c4854585c51e1f73bf4de510adca03f5bc4e'
 
 # Initialize database
 init_db()
+
+# Register fonts (optional - for better formatting)
+try:
+    pdfmetrics.registerFont(TTFont('Helvetica', 'Helvetica.ttf'))
+except:
+    pass  # Use default font if Helvetica not available
 
 def login_required(role=None):
     def decorator(f):
@@ -107,6 +123,7 @@ def dashboard():
 @login_required(role='gestionnaire')
 def sell_room():
     room_number = request.form['room_number']
+    sale_type = request.form['sale_type']  # 'full' or 'passage'
     
     conn = get_db_connection()
     
@@ -117,22 +134,31 @@ def sell_room():
     ).fetchone()
     
     if room:
+        # Determine price based on sale type
+        if sale_type == 'full':
+            price = room['price_full']
+        else:  # passage
+            price = room['price_passage']
+        
         # Mark room as sold
         conn.execute(
             'UPDATE rooms SET status = "sold" WHERE room_number = ?',
             (room_number,)
         )
         
-        # Record the sale
+        # Record the sale with type information
         today = date.today().isoformat()
         conn.execute(
-            'INSERT INTO sales (room_id, gestionnaire_id, date, price, status) VALUES (?, ?, ?, ?, ?)',
-            (room['room_id'], session['user_id'], today, room['price'], 'active')
+            'INSERT INTO sales (room_id, gestionnaire_id, date, price, status, sale_type) VALUES (?, ?, ?, ?, ?, ?)',
+            (room['room_id'], session['user_id'], today, price, 'active', sale_type)
         )
         
         conn.commit()
         conn.close()
-        flash(f'Room {room_number} sold successfully!', 'success')
+        
+        # Convert price to BIF for display
+        price_bif = f"{price:,.0f} BIF"
+        flash(f'Room {room_number} sold successfully as {sale_type.upper()} for {price_bif}!', 'success')
     else:
         conn.close()
         flash(f'Room {room_number} not available or does not exist.', 'danger')
@@ -217,17 +243,23 @@ def rooms():
 @login_required(role='admin')
 def add_room():
     room_number = request.form['room_number']
-    price = float(request.form['price'])
+    price_full = float(request.form['price_full'])
+    price_passage = float(request.form['price_passage'])
     
     conn = get_db_connection()
     
     try:
         conn.execute(
-            'INSERT INTO rooms (room_number, price) VALUES (?, ?)',
-            (room_number, price)
+            'INSERT INTO rooms (room_number, price_full, price_passage) VALUES (?, ?, ?)',
+            (room_number, price_full, price_passage)
         )
         conn.commit()
-        flash(f'Room {room_number} added successfully!', 'success')
+        
+        # Convert prices to BIF for display message
+        price_full_bif = f"{price_full:,.0f} BIF"
+        price_passage_bif = f"{price_passage:,.0f} BIF"
+        
+        flash(f'Room {room_number} added successfully! This room costs {price_full_bif} for FULL and {price_passage_bif} for PASSAGE.', 'success')
     except sqlite3.IntegrityError:
         flash(f'Room {room_number} already exists.', 'danger')
     finally:
@@ -372,6 +404,306 @@ def reports():
                          period=period,
                          start_date=start_date,
                          end_date=end_date)
+
+def create_pdf_report(start_date, end_date, sales, expenses, total_income, total_expenses, net_profit):
+    """Create a PDF report with proper formatting"""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch)
+    
+    # Create styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        spaceAfter=30,
+        alignment=1,  # Center aligned
+        textColor=colors.darkblue
+    )
+    
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=12,
+        spaceAfter=12,
+        textColor=colors.darkblue
+    )
+    
+    normal_style = styles['Normal']
+    
+    # Build story (content)
+    story = []
+    
+    # Title
+    story.append(Paragraph("CRESCENT HOTEL - RAPPORT HEBDOMADAIRE", title_style))
+    story.append(Paragraph(f"Période: {start_date} à {end_date}", normal_style))
+    story.append(Spacer(1, 20))
+    
+    # Summary Section
+    story.append(Paragraph("RÉSUMÉ", heading_style))
+    
+    summary_data = [
+        ['Revenu Total:', f"{total_income:,.0f} BIF"],
+        ['Dépenses Total:', f"{total_expenses:,.0f} BIF"],
+        ['Profit Net:', f"{net_profit:,.0f} BIF"]
+    ]
+    
+    summary_table = Table(summary_data, colWidths=[2*inch, 2*inch])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.lightgrey),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.lightblue),
+        ('BOX', (0, 0), (-1, -1), 1, colors.black),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+    ]))
+    
+    story.append(summary_table)
+    story.append(Spacer(1, 30))
+    
+    # Sales Section
+    story.append(Paragraph("VENTES", heading_style))
+    
+    if sales:
+        sales_data = [['Date', 'Chambre', 'Gestionnaire', 'Type', 'Prix (BIF)', 'Statut']]
+        
+        for sale in sales:
+            sales_data.append([
+                sale['date'],
+                sale['room_number'],
+                sale['gestionnaire_name'],
+                sale['sale_type'].upper(),
+                f"{sale['price']:,.0f}",
+                sale['status']
+            ])
+        
+        sales_table = Table(sales_data, repeatRows=1)
+        sales_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        story.append(sales_table)
+    else:
+        story.append(Paragraph("Aucune vente trouvée pour cette période.", normal_style))
+    
+    story.append(Spacer(1, 30))
+    
+    # Expenses Section
+    story.append(Paragraph("DÉPENSES", heading_style))
+    
+    if expenses:
+        expenses_data = [['Date', 'Gestionnaire', 'Raison', 'Montant (BIF)']]
+        
+        for expense in expenses:
+            expenses_data.append([
+                expense['date'],
+                expense['gestionnaire_name'],
+                expense['reason'],
+                f"{expense['amount']:,.0f}"
+            ])
+        
+        expenses_table = Table(expenses_data, repeatRows=1)
+        expenses_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkred),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.lightcoral),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        story.append(expenses_table)
+    else:
+        story.append(Paragraph("Aucune dépense trouvée pour cette période.", normal_style))
+    
+    story.append(Spacer(1, 20))
+    
+    # Footer
+    story.append(Paragraph(f"Généré le: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", normal_style))
+    
+    # Build PDF
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+@app.route('/download_pdf_report')
+@login_required(role='admin')
+def download_pdf_report():
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    if not start_date or not end_date:
+        flash('Please select both start and end dates.', 'danger')
+        return redirect(url_for('reports'))
+    
+    conn = get_db_connection()
+    
+    # Get sales data for the selected period
+    sales = conn.execute('''
+        SELECT s.*, r.room_number, u.name as gestionnaire_name 
+        FROM sales s 
+        JOIN rooms r ON s.room_id = r.room_id 
+        JOIN users u ON s.gestionnaire_id = u.id 
+        WHERE s.date BETWEEN ? AND ?
+        ORDER BY s.date DESC
+    ''', (start_date, end_date)).fetchall()
+    
+    # Get expenses data for the selected period
+    expenses = conn.execute('''
+        SELECT e.*, u.name as gestionnaire_name 
+        FROM expenses e 
+        JOIN users u ON e.gestionnaire_id = u.id 
+        WHERE e.date BETWEEN ? AND ?
+        ORDER BY e.date DESC
+    ''', (start_date, end_date)).fetchall()
+    
+    # Calculate totals
+    total_income = conn.execute(
+        'SELECT SUM(price) FROM sales WHERE date BETWEEN ? AND ?',
+        (start_date, end_date)
+    ).fetchone()[0] or 0
+    
+    total_expenses = conn.execute(
+        'SELECT SUM(amount) FROM expenses WHERE date BETWEEN ? AND ?',
+        (start_date, end_date)
+    ).fetchone()[0] or 0
+    
+    net_profit = total_income - total_expenses
+    
+    conn.close()
+    
+    # Create PDF
+    pdf_buffer = create_pdf_report(start_date, end_date, sales, expenses, total_income, total_expenses, net_profit)
+    
+    filename = f"rapport_hebdomadaire_{start_date}_a_{end_date}.pdf"
+    
+    return send_file(
+        pdf_buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=filename
+    )
+
+@app.route('/download_weekly_report')
+@login_required(role='admin')
+def download_weekly_report():
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    if not start_date or not end_date:
+        flash('Please select both start and end dates.', 'danger')
+        return redirect(url_for('reports'))
+    
+    conn = get_db_connection()
+    
+    # Get sales data for the selected period
+    sales = conn.execute('''
+        SELECT s.*, r.room_number, u.name as gestionnaire_name 
+        FROM sales s 
+        JOIN rooms r ON s.room_id = r.room_id 
+        JOIN users u ON s.gestionnaire_id = u.id 
+        WHERE s.date BETWEEN ? AND ?
+        ORDER BY s.date DESC
+    ''', (start_date, end_date)).fetchall()
+    
+    # Get expenses data for the selected period
+    expenses = conn.execute('''
+        SELECT e.*, u.name as gestionnaire_name 
+        FROM expenses e 
+        JOIN users u ON e.gestionnaire_id = u.id 
+        WHERE e.date BETWEEN ? AND ?
+        ORDER BY e.date DESC
+    ''', (start_date, end_date)).fetchall()
+    
+    # Calculate totals
+    total_income = conn.execute(
+        'SELECT SUM(price) FROM sales WHERE date BETWEEN ? AND ?',
+        (start_date, end_date)
+    ).fetchone()[0] or 0
+    
+    total_expenses = conn.execute(
+        'SELECT SUM(amount) FROM expenses WHERE date BETWEEN ? AND ?',
+        (start_date, end_date)
+    ).fetchone()[0] or 0
+    
+    net_profit = total_income - total_expenses
+    
+    conn.close()
+    
+    # Create CSV file in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow(['Rapport Hebdomadaire - Crescent Hotel'])
+    writer.writerow([f'Période: {start_date} à {end_date}'])
+    writer.writerow([])
+    
+    # Write sales section
+    writer.writerow(['VENTES'])
+    writer.writerow(['Date', 'Chambre', 'Gestionnaire', 'Type', 'Prix (BIF)', 'Statut'])
+    
+    for sale in sales:
+        writer.writerow([
+            sale['date'],
+            sale['room_number'],
+            sale['gestionnaire_name'],
+            sale['sale_type'].upper(),
+            f"{sale['price']:,.0f}",
+            sale['status']
+        ])
+    
+    writer.writerow([])
+    
+    # Write expenses section
+    writer.writerow(['DÉPENSES'])
+    writer.writerow(['Date', 'Gestionnaire', 'Raison', 'Montant (BIF)'])
+    
+    for expense in expenses:
+        writer.writerow([
+            expense['date'],
+            expense['gestionnaire_name'],
+            expense['reason'],
+            f"{expense['amount']:,.0f}"
+        ])
+    
+    writer.writerow([])
+    
+    # Write summary
+    writer.writerow(['RÉSUMÉ'])
+    writer.writerow(['Revenu Total:', f"{total_income:,.0f} BIF"])
+    writer.writerow(['Dépenses Total:', f"{total_expenses:,.0f} BIF"])
+    writer.writerow(['Profit Net:', f"{net_profit:,.0f} BIF"])
+    writer.writerow([])
+    writer.writerow(['Généré le:', datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+    
+    # Prepare file for download
+    output.seek(0)
+    
+    filename = f"rapport_hebdomadaire_{start_date}_a_{end_date}.csv"
+    
+    return send_file(
+        io.BytesIO(output.getvalue().encode('utf-8')),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=filename
+    )
 
 @app.route('/delete_report/<string:report_type>/<int:report_id>')
 @login_required(role='admin')

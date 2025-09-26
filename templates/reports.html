@@ -3,172 +3,225 @@
 {% block title %}Reports{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">Reports</h2>
-
-<!-- Date Filter Form -->
-<div class="card mb-4">
-    <div class="card-header">
-        <h5>Filter Reports</h5>
-    </div>
-    <div class="card-body">
-        <form method="GET" action="{{ url_for('reports') }}" class="row g-3">
-            <div class="col-md-3">
-                <label for="period" class="form-label">Period</label>
-                <select class="form-select" id="period" name="period" onchange="this.form.submit()">
-                    <option value="today" {% if period == 'today' %}selected{% endif %}>Today</option>
-                    <option value="week" {% if period == 'week' %}selected{% endif %}>Last 7 Days</option>
-                    <option value="month" {% if period == 'month' %}selected{% endif %}>Last 30 Days</option>
-                    <option value="custom" {% if period == 'custom' %}selected{% endif %}>Custom Range</option>
-                </select>
+<div class="row">
+    <div class="col-md-12">
+        <h2>Reports</h2>
+        
+        <!-- Date Filter Form -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Filter Reports</h5>
             </div>
-            {% if period == 'custom' %}
-            <div class="col-md-3">
-                <label for="start_date" class="form-label">Start Date</label>
-                <input type="date" class="form-control" id="start_date" name="start_date" value="{{ start_date }}">
-            </div>
-            <div class="col-md-3">
-                <label for="end_date" class="form-label">End Date</label>
-                <input type="date" class="form-control" id="end_date" name="end_date" value="{{ end_date }}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">&nbsp;</label>
-                <button type="submit" class="btn btn-primary w-100">Apply Filter</button>
-            </div>
-            {% endif %}
-        </form>
-    </div>
-</div>
-
-<!-- Summary Statistics -->
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card text-white bg-success">
-            <div class="card-body text-center">
-                <h5 class="card-title">Total Income</h5>
-                <h3 class="card-text">{{ "BIF{:,.0f}".format(total_income) }}</h3>
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('reports') }}" class="row g-3">
+                    <div class="col-md-3">
+                        <label for="period" class="form-label">Period</label>
+                        <select class="form-select" id="period" name="period" onchange="this.form.submit()">
+                            <option value="today" {% if period == 'today' %}selected{% endif %}>Today</option>
+                            <option value="week" {% if period == 'week' %}selected{% endif %}>Last 7 Days</option>
+                            <option value="month" {% if period == 'month' %}selected{% endif %}>Last 30 Days</option>
+                            <option value="custom" {% if period not in ['today', 'week', 'month'] %}selected{% endif %}>Custom Range</option>
+                        </select>
+                    </div>
+                    
+                    {% if period not in ['today', 'week', 'month'] %}
+                    <div class="col-md-3">
+                        <label for="start_date" class="form-label">Start Date</label>
+                        <input type="date" class="form-control" id="start_date" name="start_date" value="{{ start_date }}" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="end_date" class="form-label">End Date</label>
+                        <input type="date" class="form-control" id="end_date" name="end_date" value="{{ end_date }}" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="submit" class="btn btn-primary w-100">Apply Filter</button>
+                    </div>
+                    {% endif %}
+                </form>
+                
+                <!-- Download Report Buttons (Admin Only) -->
+                {% if session.role == 'admin' and period not in ['today', 'week', 'month'] %}
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <div class="btn-group" role="group">
+                            <a href="{{ url_for('download_pdf_report', start_date=start_date, end_date=end_date) }}" 
+                               class="btn btn-success">
+                                <i class="fas fa-file-pdf"></i> Download PDF Report
+                            </a>
+                            <a href="{{ url_for('download_weekly_report', start_date=start_date, end_date=end_date) }}" 
+                               class="btn btn-info">
+                                <i class="fas fa-file-csv"></i> Download CSV Report
+                            </a>
+                        </div>
+                        <small class="text-muted ms-2">Download Rapport Hebdomadaire for selected period</small>
+                    </div>
+                </div>
+                {% elif session.role == 'admin' %}
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <small class="text-muted">Select a custom date range to download reports</small>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card text-white bg-danger">
-            <div class="card-body text-center">
-                <h5 class="card-title">Total Expenses</h5>
-                <h3 class="card-text">{{ "BIF{:,.0f}".format(total_expenses) }}</h3>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card text-white bg-{{ 'success' if net_profit >= 0 else 'danger' }}">
-            <div class="card-body text-center">
-                <h5 class="card-title">Net Profit</h5>
-                <h3 class="card-text">{{ "BIF{:,.0f}".format(net_profit) }}</h3>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- Sales Reports -->
-<div class="card mb-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5>Sales Reports</h5>
-        <span class="badge bg-primary">Total: {{ sales|length }}</span>
-    </div>
-    <div class="card-body">
-        {% if sales %}
-        <div class="table-responsive">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Room Number</th>
-                        <th>Gestionnaire</th>
-                        <th>Price (BIF)</th>
-                        <th>Status</th>
-                        {% if session.role == 'admin' %}
-                        <th>Actions</th>
-                        {% endif %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for sale in sales %}
-                    <tr>
-                        <td>{{ sale.date }}</td>
-                        <td>{{ sale.room_number }}</td>
-                        <td>{{ sale.gestionnaire_name }}</td>
-                        <td>{{ "BIF{:,.0f}".format(sale.price) }}</td>
-                        <td>
-                            <span class="badge bg-{{ 'success' if sale.status == 'restored' else 'warning' if sale.status == 'active' else 'secondary' }}">
-                                {{ sale.status|title }}
-                                {% if sale.restore_date %}
-                                <br><small>Restored: {{ sale.restore_date }}</small>
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card text-white bg-success">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Income</h5>
+                        <h3 class="card-text">{{ "{:,.0f} BIF".format(total_income) }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-danger">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Expenses</h5>
+                        <h3 class="card-text">{{ "{:,.0f} BIF".format(total_expenses) }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-info">
+                    <div class="card-body">
+                        <h5 class="card-title">Net Profit</h5>
+                        <h3 class="card-text">{{ "{:,.0f} BIF".format(net_profit) }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sales Report -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Sales Report</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Room</th>
+                                <th>Gestionnaire</th>
+                                <th>Type</th>
+                                <th>Price</th>
+                                <th>Status</th>
+                                {% if session.role == 'admin' %}
+                                <th>Actions</th>
                                 {% endif %}
-                            </span>
-                        </td>
-                        {% if session.role == 'admin' %}
-                        <td>
-                            <a href="{{ url_for('delete_report', report_type='sale', report_id=sale.id) }}" 
-                               class="btn btn-danger btn-sm" 
-                               onclick="return confirm('Are you sure you want to delete this sale report? The room will be marked as available again.')">
-                                Delete
-                            </a>
-                        </td>
-                        {% endif %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sale in sales %}
+                            <tr>
+                                <td>{{ sale.date }}</td>
+                                <td>{{ sale.room_number }}</td>
+                                <td>{{ sale.gestionnaire_name }}</td>
+                                <td>
+                                    <span class="badge {% if sale.sale_type == 'full' %}bg-primary{% else %}bg-warning{% endif %}">
+                                        {{ sale.sale_type.upper() }}
+                                    </span>
+                                </td>
+                                <td>{{ "{:,.0f} BIF".format(sale.price) }}</td>
+                                <td>
+                                    <span class="badge {% if sale.status == 'active' %}bg-success{% else %}bg-secondary{% endif %}">
+                                        {{ sale.status }}
+                                    </span>
+                                </td>
+                                {% if session.role == 'admin' %}
+                                <td>
+                                    <a href="{{ url_for('delete_report', report_type='sale', report_id=sale.id) }}" 
+                                       class="btn btn-sm btn-danger"
+                                       onclick="return confirm('Are you sure you want to delete this sale record?')">
+                                        Delete
+                                    </a>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="{% if session.role == 'admin' %}7{% else %}6{% endif %}" class="text-center">No sales records found</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
-        {% else %}
-        <p class="text-muted">No sales records found for the selected period.</p>
-        {% endif %}
+
+        <!-- Expenses Report -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Expenses Report</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Gestionnaire</th>
+                                <th>Reason</th>
+                                <th>Amount</th>
+                                {% if session.role == 'admin' %}
+                                <th>Actions</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for expense in expenses %}
+                            <tr>
+                                <td>{{ expense.date }}</td>
+                                <td>{{ expense.gestionnaire_name }}</td>
+                                <td>{{ expense.reason }}</td>
+                                <td>{{ "{:,.0f} BIF".format(expense.amount) }}</td>
+                                {% if session.role == 'admin' %}
+                                <td>
+                                    <a href="{{ url_for('delete_report', report_type='expense', report_id=expense.id) }}" 
+                                       class="btn btn-sm btn-danger"
+                                       onclick="return confirm('Are you sure you want to delete this expense record?')">
+                                        Delete
+                                    </a>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="{% if session.role == 'admin' %}5{% else %}4{% endif %}" class="text-center">No expenses records found</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- Expenses Reports -->
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5>Expenses Reports</h5>
-        <span class="badge bg-primary">Total: {{ expenses|length }}</span>
-    </div>
-    <div class="card-body">
-        {% if expenses %}
-        <div class="table-responsive">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Reason</th>
-                        <th>Gestionnaire</th>
-                        <th>Amount (BIF)</th>
-                        {% if session.role == 'admin' %}
-                        <th>Actions</th>
-                        {% endif %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for expense in expenses %}
-                    <tr>
-                        <td>{{ expense.date }}</td>
-                        <td>{{ expense.reason }}</td>
-                        <td>{{ expense.gestionnaire_name }}</td>
-                        <td>{{ "BIF{:,.0f}".format(expense.amount) }}</td>
-                        {% if session.role == 'admin' %}
-                        <td>
-                            <a href="{{ url_for('delete_report', report_type='expense', report_id=expense.id) }}" 
-                               class="btn btn-danger btn-sm" 
-                               onclick="return confirm('Are you sure you want to delete this expense report?')">
-                                Delete
-                            </a>
-                        </td>
-                        {% endif %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="text-muted">No expenses records found for the selected period.</p>
-        {% endif %}
-    </div>
-</div>
+<style>
+.card {
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    border: 1px solid #e3e6f0;
+}
+
+.card-header {
+    background-color: #f8f9fc;
+    border-bottom: 1px solid #e3e6f0;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #6e707e;
+}
+
+.btn-group .btn {
+    margin-right: 5px;
+}
+</style>
 {% endblock %}

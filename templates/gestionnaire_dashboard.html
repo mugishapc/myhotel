@@ -1,133 +1,112 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard{% endblock %}
+{% block title %}Gestionnaire Dashboard{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">Dashboard</h2>
-
 <div class="row">
-    <div class="col-md-3 mb-4">
-        <div class="card text-white bg-primary">
-            <div class="card-body">
-                <h5 class="card-title">Total Rooms</h5>
-                <h2 class="card-text">{{ stats.total_rooms }}</h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="card text-white bg-success">
-            <div class="card-body">
-                <h5 class="card-title">Available Rooms</h5>
-                <h2 class="card-text">{{ stats.available_rooms }}</h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="card text-white bg-warning">
-            <div class="card-body">
-                <h5 class="card-title">Rooms Sold</h5>
-                <h2 class="card-text">{{ stats.sold_rooms }}</h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="card text-white bg-info">
-            <div class="card-body">
-                <h5 class="card-title">Occupancy Rate</h5>
-                <h2 class="card-text">{{ "%.1f"|format((stats.sold_rooms / stats.total_rooms * 100) if stats.total_rooms > 0 else 0) }}%</h2>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Sell a Room</h5>
-            </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('sell_room') }}">
-                    <div class="mb-3">
-                        <label for="room_number" class="form-label">Room Number</label>
-                        <input type="number" class="form-control" id="room_number" name="room_number" min="1" required>
+    <div class="col-md-12">
+        <h2>Gestionnaire Dashboard</h2>
+        
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-white bg-primary">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Rooms</h5>
+                        <h2 class="card-text">{{ stats.total_rooms }}</h2>
                     </div>
-                    <button type="submit" class="btn btn-success w-100">Mark as Sold</button>
-                </form>
+                </div>
             </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Restore a Room</h5>
-            </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('restore_room') }}">
-                    <div class="mb-3">
-                        <label for="restore_room_number" class="form-label">Room Number</label>
-                        <input type="number" class="form-control" id="restore_room_number" name="room_number" min="1" required>
+            <div class="col-md-3">
+                <div class="card text-white bg-success">
+                    <div class="card-body">
+                        <h5 class="card-title">Available Rooms</h5>
+                        <h2 class="card-text">{{ stats.available_rooms }}</h2>
                     </div>
-                    <button type="submit" class="btn btn-info w-100">Mark as Available</button>
-                </form>
+                </div>
             </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Record Expense</h5>
-            </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('add_expense') }}">
-                    <div class="mb-3">
-                        <label for="reason" class="form-label">Reason</label>
-                        <input type="text" class="form-control" id="reason" name="reason" required>
+            <div class="col-md-3">
+                <div class="card text-white bg-warning">
+                    <div class="card-body">
+                        <h5 class="card-title">Sold Rooms</h5>
+                        <h2 class="card-text">{{ stats.sold_rooms }}</h2>
                     </div>
-                    <div class="mb-3">
-                        <label for="amount" class="form-label">Amount (BIF)</label>
-                        <input type="number" class="form-control" id="amount" name="amount" min="0" step="0.01" required>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-info">
+                    <div class="card-body">
+                        <h5 class="card-title">Today's Profit</h5>
+                        <h2 class="card-text">{{ "{:,.0f}".format(stats.profit) }} BIF</h2>
                     </div>
-                    <button type="submit" class="btn btn-warning w-100">Record Expense</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5>Quick Actions</h5>
-            </div>
-            <div class="card-body">
-                <div class="d-grid gap-2 d-md-flex">
-                    <a href="{{ url_for('reports') }}" class="btn btn-outline-info me-md-2">View My Reports History</a>
-                    <a href="{{ url_for('expenses') }}" class="btn btn-outline-warning">View My Expenses</a>
-                    <a href="{{ url_for('rooms') }}" class="btn btn-outline-primary">View All Rooms</a>
                 </div>
             </div>
         </div>
-    </div>
-</div>
 
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5>Room Status Legend</h5>
+        <!-- Room Management Section -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Sell Room</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('sell_room') }}">
+                            <div class="mb-3">
+                                <label for="room_number" class="form-label">Room Number</label>
+                                <input type="number" class="form-control" id="room_number" name="room_number" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Sale Type</label>
+                                <div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="sale_type" id="full" value="full" checked>
+                                        <label class="form-check-label" for="full">Full</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="sale_type" id="passage" value="passage">
+                                        <label class="form-check-label" for="passage">Passage</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-success">Sell Room</button>
+                        </form>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4">
-                        <span class="badge bg-success">Available</span> - Room is ready for new clients
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Restore Room</h5>
                     </div>
-                    <div class="col-md-4">
-                        <span class="badge bg-warning">Sold</span> - Room is currently occupied
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('restore_room') }}">
+                            <div class="mb-3">
+                                <label for="restore_room_number" class="form-label">Room Number</label>
+                                <input type="number" class="form-control" id="restore_room_number" name="room_number" required>
+                            </div>
+                            <button type="submit" class="btn btn-warning">Restore Room</button>
+                        </form>
                     </div>
-                    <div class="col-md-4">
-                        <span class="badge bg-info">Restored</span> - Room was occupied and now available again
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5>Add Expense</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('add_expense') }}">
+                            <div class="mb-3">
+                                <label for="reason" class="form-label">Reason</label>
+                                <input type="text" class="form-control" id="reason" name="reason" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="amount" class="form-label">Amount (BIF)</label>
+                                <input type="number" class="form-control" id="amount" name="amount" step="0.01" required>
+                            </div>
+                            <button type="submit" class="btn btn-danger">Add Expense</button>
+                        </form>
                     </div>
                 </div>
             </div>
