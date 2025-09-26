@@ -55,11 +55,12 @@ def init_db():
         )
     ''')
     
-    # Check and update rooms table structure
-    try:
-        cursor.execute("SELECT price_full FROM rooms LIMIT 1")
-    except sqlite3.OperationalError:
-        # Add the new price columns if they don't exist
+    # Check if old price column exists and migrate data
+    cursor.execute("PRAGMA table_info(rooms)")
+    columns = [column[1] for column in cursor.fetchall()]
+    
+    if 'price' in columns and 'price_full' not in columns:
+        # Add the new price columns
         cursor.execute('ALTER TABLE rooms ADD COLUMN price_full REAL NOT NULL DEFAULT 0')
         cursor.execute('ALTER TABLE rooms ADD COLUMN price_passage REAL NOT NULL DEFAULT 0')
         
@@ -72,28 +73,37 @@ def init_db():
                 (room[1], room[1] * 0.6, room[0])  # Passage price is 60% of full price by default
             )
         
-        # Remove the old price column
-        try:
-            cursor.execute('ALTER TABLE rooms DROP COLUMN price')
-        except:
-            pass  # Column might not exist or SQLite doesn't support DROP COLUMN
+        # Remove the old price column (SQLite doesn't support DROP COLUMN directly)
+        # Instead, we'll create a new table and copy data
+        cursor.execute('''
+            CREATE TABLE rooms_new (
+                room_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_number INTEGER UNIQUE NOT NULL,
+                status TEXT DEFAULT 'available',
+                price_full REAL NOT NULL,
+                price_passage REAL NOT NULL
+            )
+        ''')
+        
+        cursor.execute('''
+            INSERT INTO rooms_new (room_id, room_number, status, price_full, price_passage)
+            SELECT room_id, room_number, status, price_full, price_passage FROM rooms
+        ''')
+        
+        cursor.execute('DROP TABLE rooms')
+        cursor.execute('ALTER TABLE rooms_new RENAME TO rooms')
     
-    # Check if the sale_type column exists in sales table, if not, add it
-    try:
-        cursor.execute("SELECT sale_type FROM sales LIMIT 1")
-    except sqlite3.OperationalError:
+    # Check if sale_type column exists in sales table
+    cursor.execute("PRAGMA table_info(sales)")
+    sales_columns = [column[1] for column in cursor.fetchall()]
+    
+    if 'sale_type' not in sales_columns:
         cursor.execute('ALTER TABLE sales ADD COLUMN sale_type TEXT NOT NULL DEFAULT "full"')
     
-    # Check if the status column exists in sales table, if not, add it
-    try:
-        cursor.execute("SELECT status FROM sales LIMIT 1")
-    except sqlite3.OperationalError:
+    if 'status' not in sales_columns:
         cursor.execute('ALTER TABLE sales ADD COLUMN status TEXT DEFAULT "active"')
     
-    # Check if the restore_date column exists in sales table, if not, add it
-    try:
-        cursor.execute("SELECT restore_date FROM sales LIMIT 1")
-    except sqlite3.OperationalError:
+    if 'restore_date' not in sales_columns:
         cursor.execute('ALTER TABLE sales ADD COLUMN restore_date TEXT')
     
     # Check if admin user exists
@@ -123,10 +133,8 @@ def init_db():
                 (i, price_full, price_passage)
             )
     
-    # Update existing sales records to have status 'active' if they don't have it
+    # Update existing sales records to have proper defaults
     cursor.execute("UPDATE sales SET status = 'active' WHERE status IS NULL")
-    
-    # Update existing sales records to have sale_type 'full' if they don't have it
     cursor.execute("UPDATE sales SET sale_type = 'full' WHERE sale_type IS NULL")
     
     conn.commit()
@@ -136,3 +144,23 @@ def get_db_connection():
     conn = sqlite3.connect('hotel.db')
     conn.row_factory = sqlite3.Row
     return conn
+
+def verify_user(username, password):
+    """Verify user credentials and return user data if valid"""
+    conn = get_db_connection()
+    user = conn.execute(
+        'SELECT * FROM users WHERE name = ? AND password = ?',
+        (username, password)
+    ).fetchone()
+    conn.close()
+    return user
+
+def get_user_by_id(user_id):
+    """Get user by ID"""
+    conn = get_db_connection()
+    user = conn.execute(
+        'SELECT * FROM users WHERE id = ?',
+        (user_id,)
+    ).fetchone()
+    conn.close()
+    return user 
