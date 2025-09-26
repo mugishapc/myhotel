@@ -61,14 +61,17 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        
+
         conn = get_db_connection()
-        user = conn.execute(
-            'SELECT * FROM users WHERE name = ? AND password = ?',
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM users WHERE name=%s AND password=%s",
             (username, password)
-        ).fetchone()
+        )
+        user = cursor.fetchone()
+        cursor.close()
         conn.close()
-        
+
         if user:
             session['user_id'] = user['id']
             session['username'] = user['name']
@@ -77,60 +80,64 @@ def login():
             return redirect(url_for('dashboard'))
         else:
             flash('Invalid credentials. Please try again.', 'danger')
-    
+
     return render_template('login.html')
 
 @app.route('/dashboard')
 @login_required()
 def dashboard():
     conn = get_db_connection()
+    cursor = conn.cursor()
     
     # Get today's date
     today = date.today().isoformat()
     
-    # Get total rooms
-    total_rooms = conn.execute('SELECT COUNT(*) FROM rooms').fetchone()[0]
-    
-    # Get available rooms
-    available_rooms = conn.execute(
-        "SELECT COUNT(*) FROM rooms WHERE status = 'available'"
-    ).fetchone()[0]
-    
-    # Get sold rooms
-    sold_rooms = conn.execute(
-        "SELECT COUNT(*) FROM rooms WHERE status = 'sold'"
-    ).fetchone()[0]
-    
-    # Get today's income
-    today_income = conn.execute(
-        'SELECT SUM(price) FROM sales WHERE date = ?',
-        (today,)
-    ).fetchone()[0] or 0
-    
-    # Get today's expenses
-    today_expenses = conn.execute(
-        'SELECT SUM(amount) FROM expenses WHERE date = ?',
-        (today,)
-    ).fetchone()[0] or 0
-    
-    # Calculate profit
-    profit = today_income - today_expenses
-    
-    conn.close()
-    
-    stats = {
-        'total_rooms': total_rooms,
-        'available_rooms': available_rooms,
-        'sold_rooms': sold_rooms,
-        'today_income': today_income,
-        'today_expenses': today_expenses,
-        'profit': profit
-    }
-    
-    if session['role'] == 'admin':
-        return render_template('admin_dashboard.html', stats=stats)
-    else:
-        return render_template('gestionnaire_dashboard.html', stats=stats)
+    try:
+        # Get total rooms
+        cursor.execute('SELECT COUNT(*) FROM rooms')
+        total_rooms = cursor.fetchone()['count']
+        
+        # Get available rooms
+        cursor.execute("SELECT COUNT(*) FROM rooms WHERE status = 'available'")
+        available_rooms = cursor.fetchone()['count']
+        
+        # Get sold rooms
+        cursor.execute("SELECT COUNT(*) FROM rooms WHERE status = 'sold'")
+        sold_rooms = cursor.fetchone()['count']
+        
+        # Get today's income
+        cursor.execute('SELECT SUM(price) FROM sales WHERE date = %s', (today,))
+        today_income_result = cursor.fetchone()['sum']
+        today_income = today_income_result if today_income_result else 0
+        
+        # Get today's expenses
+        cursor.execute('SELECT SUM(amount) FROM expenses WHERE date = %s', (today,))
+        today_expenses_result = cursor.fetchone()['sum']
+        today_expenses = today_expenses_result if today_expenses_result else 0
+        
+        # Calculate profit
+        profit = today_income - today_expenses
+        
+        stats = {
+            'total_rooms': total_rooms,
+            'available_rooms': available_rooms,
+            'sold_rooms': sold_rooms,
+            'today_income': today_income,
+            'today_expenses': today_expenses,
+            'profit': profit
+        }
+        
+        if session['role'] == 'admin':
+            return render_template('admin_dashboard.html', stats=stats)
+        else:
+            return render_template('gestionnaire_dashboard.html', stats=stats)
+            
+    except Exception as e:
+        flash(f'Error loading dashboard: {str(e)}', 'danger')
+        return redirect(url_for('login'))
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route('/sell_room', methods=['POST'])
 @login_required(role='gestionnaire')
@@ -139,42 +146,50 @@ def sell_room():
     sale_type = request.form['sale_type']  # 'full' or 'passage'
     
     conn = get_db_connection()
+    cursor = conn.cursor()
     
-    # Check if room exists and is available
-    room = conn.execute(
-        'SELECT * FROM rooms WHERE room_number = ? AND status = "available"',
-        (room_number,)
-    ).fetchone()
+    try:
+        # Check if room exists and is available
+        cursor.execute(
+            'SELECT * FROM rooms WHERE room_number = %s AND status = %s',
+            (room_number, 'available')
+        )
+        room = cursor.fetchone()
+        
+        if room:
+            # Determine price based on sale type
+            if sale_type == 'full':
+                price = room['price_full']
+            else:  # passage
+                price = room['price_passage']
+            
+            # Mark room as sold
+            cursor.execute(
+                'UPDATE rooms SET status = %s WHERE room_number = %s',
+                ('sold', room_number)
+            )
+            
+            # Record the sale with type information
+            today = date.today().isoformat()
+            cursor.execute(
+                'INSERT INTO sales (room_id, gestionnaire_id, date, price, status, sale_type) VALUES (%s, %s, %s, %s, %s, %s)',
+                (room['room_id'], session['user_id'], today, price, 'active', sale_type)
+            )
+            
+            conn.commit()
+            
+            # Convert price to BIF for display
+            price_bif = f"{price:,.0f} BIF"
+            flash(f'Room {room_number} sold successfully as {sale_type.upper()} for {price_bif}!', 'success')
+        else:
+            flash(f'Room {room_number} not available or does not exist.', 'danger')
     
-    if room:
-        # Determine price based on sale type
-        if sale_type == 'full':
-            price = room['price_full']
-        else:  # passage
-            price = room['price_passage']
-        
-        # Mark room as sold
-        conn.execute(
-            'UPDATE rooms SET status = "sold" WHERE room_number = ?',
-            (room_number,)
-        )
-        
-        # Record the sale with type information
-        today = date.today().isoformat()
-        conn.execute(
-            'INSERT INTO sales (room_id, gestionnaire_id, date, price, status, sale_type) VALUES (?, ?, ?, ?, ?, ?)',
-            (room['room_id'], session['user_id'], today, price, 'active', sale_type)
-        )
-        
-        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error selling room: {str(e)}', 'danger')
+    finally:
+        cursor.close()
         conn.close()
-        
-        # Convert price to BIF for display
-        price_bif = f"{price:,.0f} BIF"
-        flash(f'Room {room_number} sold successfully as {sale_type.upper()} for {price_bif}!', 'success')
-    else:
-        conn.close()
-        flash(f'Room {room_number} not available or does not exist.', 'danger')
     
     return redirect(url_for('dashboard'))
 
@@ -184,42 +199,50 @@ def restore_room():
     room_number = request.form['room_number']
     
     conn = get_db_connection()
+    cursor = conn.cursor()
     
-    # Check if room exists and is sold
-    room = conn.execute(
-        'SELECT * FROM rooms WHERE room_number = ? AND status = "sold"',
-        (room_number,)
-    ).fetchone()
-    
-    if room:
-        # Check if there's an active sale for this room by the current gestionnaire
-        active_sale = conn.execute(
-            'SELECT * FROM sales WHERE room_id = ? AND gestionnaire_id = ? AND status = "active"',
-            (room['room_id'], session['user_id'])
-        ).fetchone()
+    try:
+        # Check if room exists and is sold
+        cursor.execute(
+            'SELECT * FROM rooms WHERE room_number = %s AND status = %s',
+            (room_number, 'sold')
+        )
+        room = cursor.fetchone()
         
-        if active_sale:
-            # Mark room as available
-            conn.execute(
-                'UPDATE rooms SET status = "available" WHERE room_number = ?',
-                (room_number,)
+        if room:
+            # Check if there's an active sale for this room by the current gestionnaire
+            cursor.execute(
+                'SELECT * FROM sales WHERE room_id = %s AND gestionnaire_id = %s AND status = %s',
+                (room['room_id'], session['user_id'], 'active')
             )
+            active_sale = cursor.fetchone()
             
-            # Update the sale status to 'restored'
-            conn.execute(
-                'UPDATE sales SET status = "restored", restore_date = ? WHERE id = ?',
-                (date.today().isoformat(), active_sale['id'])
-            )
-            
-            conn.commit()
-            conn.close()
-            flash(f'Room {room_number} restored successfully! Clients have left the room.', 'success')
+            if active_sale:
+                # Mark room as available
+                cursor.execute(
+                    'UPDATE rooms SET status = %s WHERE room_number = %s',
+                    ('available', room_number)
+                )
+                
+                # Update the sale status to 'restored'
+                cursor.execute(
+                    'UPDATE sales SET status = %s, restore_date = %s WHERE id = %s',
+                    ('restored', date.today().isoformat(), active_sale['id'])
+                )
+                
+                conn.commit()
+                flash(f'Room {room_number} restored successfully! Clients have left the room.', 'success')
+            else:
+                flash(f'No active sale found for room {room_number} under your account.', 'danger')
         else:
-            conn.close()
-            flash(f'No active sale found for room {room_number} under your account.', 'danger')
-    else:
+            flash(f'Room {room_number} is not sold or does not exist.', 'danger')
+    
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error restoring room: {str(e)}', 'danger')
+    finally:
+        cursor.close()
         conn.close()
-        flash(f'Room {room_number} is not sold or does not exist.', 'danger')
     
     return redirect(url_for('dashboard'))
 
@@ -230,27 +253,44 @@ def add_expense():
     amount = float(request.form['amount'])
     
     conn = get_db_connection()
-    today = date.today().isoformat()
+    cursor = conn.cursor()
     
-    conn.execute(
-        'INSERT INTO expenses (gestionnaire_id, reason, amount, date) VALUES (?, ?, ?, ?)',
-        (session['user_id'], reason, amount, today)
-    )
+    try:
+        today = date.today().isoformat()
+        
+        cursor.execute(
+            'INSERT INTO expenses (gestionnaire_id, reason, amount, date) VALUES (%s, %s, %s, %s)',
+            (session['user_id'], reason, amount, today)
+        )
+        
+        conn.commit()
+        flash('Expense recorded successfully!', 'success')
     
-    conn.commit()
-    conn.close()
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error recording expense: {str(e)}', 'danger')
+    finally:
+        cursor.close()
+        conn.close()
     
-    flash('Expense recorded successfully!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/rooms')
 @login_required()
 def rooms():
     conn = get_db_connection()
-    rooms = conn.execute('SELECT * FROM rooms ORDER BY room_number').fetchall()
-    conn.close()
+    cursor = conn.cursor()
     
-    return render_template('rooms.html', rooms=rooms)
+    try:
+        cursor.execute('SELECT * FROM rooms ORDER BY room_number')
+        rooms = cursor.fetchall()
+        return render_template('rooms.html', rooms=rooms)
+    except Exception as e:
+        flash(f'Error loading rooms: {str(e)}', 'danger')
+        return redirect(url_for('dashboard'))
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route('/add_room', methods=['POST'])
 @login_required(role='admin')
@@ -260,10 +300,11 @@ def add_room():
     price_passage = float(request.form['price_passage'])
     
     conn = get_db_connection()
+    cursor = conn.cursor()
     
     try:
-        conn.execute(
-            'INSERT INTO rooms (room_number, price_full, price_passage) VALUES (?, ?, ?)',
+        cursor.execute(
+            'INSERT INTO rooms (room_number, price_full, price_passage) VALUES (%s, %s, %s)',
             (room_number, price_full, price_passage)
         )
         conn.commit()
@@ -273,9 +314,15 @@ def add_room():
         price_passage_bif = f"{price_passage:,.0f} BIF"
         
         flash(f'Room {room_number} added successfully! This room costs {price_full_bif} for FULL and {price_passage_bif} for PASSAGE.', 'success')
-    except sqlite3.IntegrityError:
-        flash(f'Room {room_number} already exists.', 'danger')
+    
+    except Exception as e:
+        conn.rollback()
+        if 'unique constraint' in str(e).lower():
+            flash(f'Room {room_number} already exists.', 'danger')
+        else:
+            flash(f'Error adding room: {str(e)}', 'danger')
     finally:
+        cursor.close()
         conn.close()
     
     return redirect(url_for('rooms'))
@@ -284,44 +331,61 @@ def add_room():
 @login_required(role='admin')
 def delete_room(room_id):
     conn = get_db_connection()
+    cursor = conn.cursor()
     
-    # Check if room is sold
-    room = conn.execute('SELECT * FROM rooms WHERE room_id = ?', (room_id,)).fetchone()
+    try:
+        # Check if room is sold
+        cursor.execute('SELECT * FROM rooms WHERE room_id = %s', (room_id,))
+        room = cursor.fetchone()
+        
+        if room and room['status'] == 'sold':
+            flash('Cannot delete a sold room.', 'danger')
+        else:
+            cursor.execute('DELETE FROM rooms WHERE room_id = %s', (room_id,))
+            conn.commit()
+            flash('Room deleted successfully!', 'success')
     
-    if room and room['status'] == 'sold':
-        flash('Cannot delete a sold room.', 'danger')
-    else:
-        conn.execute('DELETE FROM rooms WHERE room_id = ?', (room_id,))
-        conn.commit()
-        flash('Room deleted successfully!', 'success')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error deleting room: {str(e)}', 'danger')
+    finally:
+        cursor.close()
+        conn.close()
     
-    conn.close()
     return redirect(url_for('rooms'))
 
 @app.route('/expenses')
 @login_required()
 def expenses():
     conn = get_db_connection()
+    cursor = conn.cursor()
     
-    if session['role'] == 'admin':
-        expenses_list = conn.execute('''
-            SELECT e.*, u.name as gestionnaire_name 
-            FROM expenses e 
-            JOIN users u ON e.gestionnaire_id = u.id 
-            ORDER BY e.date DESC
-        ''').fetchall()
-    else:
-        expenses_list = conn.execute('''
-            SELECT e.*, u.name as gestionnaire_name 
-            FROM expenses e 
-            JOIN users u ON e.gestionnaire_id = u.id 
-            WHERE e.gestionnaire_id = ?
-            ORDER BY e.date DESC
-        ''', (session['user_id'],)).fetchall()
+    try:
+        if session['role'] == 'admin':
+            cursor.execute('''
+                SELECT e.*, u.name as gestionnaire_name 
+                FROM expenses e 
+                JOIN users u ON e.gestionnaire_id = u.id 
+                ORDER BY e.date DESC
+            ''')
+        else:
+            cursor.execute('''
+                SELECT e.*, u.name as gestionnaire_name 
+                FROM expenses e 
+                JOIN users u ON e.gestionnaire_id = u.id 
+                WHERE e.gestionnaire_id = %s
+                ORDER BY e.date DESC
+            ''', (session['user_id'],))
+        
+        expenses_list = cursor.fetchall()
+        return render_template('expenses.html', expenses=expenses_list)
     
-    conn.close()
-    
-    return render_template('expenses.html', expenses=expenses_list)
+    except Exception as e:
+        flash(f'Error loading expenses: {str(e)}', 'danger')
+        return redirect(url_for('dashboard'))
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route('/reports')
 @login_required()
@@ -343,80 +407,99 @@ def reports():
         end_date = request.args.get('end_date', date.today().isoformat())
     
     conn = get_db_connection()
+    cursor = conn.cursor()
     
-    # Get sales data
-    if session['role'] == 'admin':
-        sales = conn.execute('''
-            SELECT s.*, r.room_number, u.name as gestionnaire_name 
-            FROM sales s 
-            JOIN rooms r ON s.room_id = r.room_id 
-            JOIN users u ON s.gestionnaire_id = u.id 
-            WHERE s.date BETWEEN ? AND ?
-            ORDER BY s.date DESC
-        ''', (start_date, end_date)).fetchall()
-    else:
-        sales = conn.execute('''
-            SELECT s.*, r.room_number, u.name as gestionnaire_name 
-            FROM sales s 
-            JOIN rooms r ON s.room_id = r.room_id 
-            JOIN users u ON s.gestionnaire_id = u.id 
-            WHERE s.gestionnaire_id = ? AND s.date BETWEEN ? AND ?
-            ORDER BY s.date DESC
-        ''', (session['user_id'], start_date, end_date)).fetchall()
-    
-    # Get expenses data
-    if session['role'] == 'admin':
-        expenses = conn.execute('''
-            SELECT e.*, u.name as gestionnaire_name 
-            FROM expenses e 
-            JOIN users u ON e.gestionnaire_id = u.id 
-            WHERE e.date BETWEEN ? AND ?
-            ORDER BY e.date DESC
-        ''', (start_date, end_date)).fetchall()
-    else:
-        expenses = conn.execute('''
-            SELECT e.*, u.name as gestionnaire_name 
-            FROM expenses e 
-            JOIN users u ON e.gestionnaire_id = u.id 
-            WHERE e.gestionnaire_id = ? AND e.date BETWEEN ? AND ?
-            ORDER BY e.date DESC
-        ''', (session['user_id'], start_date, end_date)).fetchall()
-    
-    # Calculate totals
-    if session['role'] == 'admin':
-        total_income = conn.execute(
-            'SELECT SUM(price) FROM sales WHERE date BETWEEN ? AND ?',
-            (start_date, end_date)
-        ).fetchone()[0] or 0
+    try:
+        # Get sales data
+        if session['role'] == 'admin':
+            cursor.execute('''
+                SELECT s.*, r.room_number, u.name as gestionnaire_name 
+                FROM sales s 
+                JOIN rooms r ON s.room_id = r.room_id 
+                JOIN users u ON s.gestionnaire_id = u.id 
+                WHERE s.date BETWEEN %s AND %s
+                ORDER BY s.date DESC
+            ''', (start_date, end_date))
+        else:
+            cursor.execute('''
+                SELECT s.*, r.room_number, u.name as gestionnaire_name 
+                FROM sales s 
+                JOIN rooms r ON s.room_id = r.room_id 
+                JOIN users u ON s.gestionnaire_id = u.id 
+                WHERE s.gestionnaire_id = %s AND s.date BETWEEN %s AND %s
+                ORDER BY s.date DESC
+            ''', (session['user_id'], start_date, end_date))
         
-        total_expenses = conn.execute(
-            'SELECT SUM(amount) FROM expenses WHERE date BETWEEN ? AND ?',
-            (start_date, end_date)
-        ).fetchone()[0] or 0
-    else:
-        total_income = conn.execute(
-            'SELECT SUM(price) FROM sales WHERE gestionnaire_id = ? AND date BETWEEN ? AND ?',
-            (session['user_id'], start_date, end_date)
-        ).fetchone()[0] or 0
+        sales = cursor.fetchall()
         
-        total_expenses = conn.execute(
-            'SELECT SUM(amount) FROM expenses WHERE gestionnaire_id = ? AND date BETWEEN ? AND ?',
-            (session['user_id'], start_date, end_date)
-        ).fetchone()[0] or 0
+        # Get expenses data
+        if session['role'] == 'admin':
+            cursor.execute('''
+                SELECT e.*, u.name as gestionnaire_name 
+                FROM expenses e 
+                JOIN users u ON e.gestionnaire_id = u.id 
+                WHERE e.date BETWEEN %s AND %s
+                ORDER BY e.date DESC
+            ''', (start_date, end_date))
+        else:
+            cursor.execute('''
+                SELECT e.*, u.name as gestionnaire_name 
+                FROM expenses e 
+                JOIN users u ON e.gestionnaire_id = u.id 
+                WHERE e.gestionnaire_id = %s AND e.date BETWEEN %s AND %s
+                ORDER BY e.date DESC
+            ''', (session['user_id'], start_date, end_date))
+        
+        expenses = cursor.fetchall()
+        
+        # Calculate totals
+        if session['role'] == 'admin':
+            cursor.execute(
+                'SELECT SUM(price) FROM sales WHERE date BETWEEN %s AND %s',
+                (start_date, end_date)
+            )
+            total_income_result = cursor.fetchone()['sum']
+            total_income = total_income_result if total_income_result else 0
+            
+            cursor.execute(
+                'SELECT SUM(amount) FROM expenses WHERE date BETWEEN %s AND %s',
+                (start_date, end_date)
+            )
+            total_expenses_result = cursor.fetchone()['sum']
+            total_expenses = total_expenses_result if total_expenses_result else 0
+        else:
+            cursor.execute(
+                'SELECT SUM(price) FROM sales WHERE gestionnaire_id = %s AND date BETWEEN %s AND %s',
+                (session['user_id'], start_date, end_date)
+            )
+            total_income_result = cursor.fetchone()['sum']
+            total_income = total_income_result if total_income_result else 0
+            
+            cursor.execute(
+                'SELECT SUM(amount) FROM expenses WHERE gestionnaire_id = %s AND date BETWEEN %s AND %s',
+                (session['user_id'], start_date, end_date)
+            )
+            total_expenses_result = cursor.fetchone()['sum']
+            total_expenses = total_expenses_result if total_expenses_result else 0
+        
+        net_profit = total_income - total_expenses
+        
+        return render_template('reports.html', 
+                             sales=sales, 
+                             expenses=expenses,
+                             total_income=total_income,
+                             total_expenses=total_expenses,
+                             net_profit=net_profit,
+                             period=period,
+                             start_date=start_date,
+                             end_date=end_date)
     
-    net_profit = total_income - total_expenses
-    
-    conn.close()
-    
-    return render_template('reports.html', 
-                         sales=sales, 
-                         expenses=expenses,
-                         total_income=total_income,
-                         total_expenses=total_expenses,
-                         net_profit=net_profit,
-                         period=period,
-                         start_date=start_date,
-                         end_date=end_date)
+    except Exception as e:
+        flash(f'Error loading reports: {str(e)}', 'danger')
+        return redirect(url_for('dashboard'))
+    finally:
+        cursor.close()
+        conn.close()
 
 def create_pdf_report(start_date, end_date, sales, expenses, total_income, total_expenses, net_profit):
     """Create a PDF report with proper formatting"""
@@ -566,52 +649,65 @@ def download_pdf_report():
         return redirect(url_for('reports'))
     
     conn = get_db_connection()
+    cursor = conn.cursor()
     
-    # Get sales data for the selected period
-    sales = conn.execute('''
-        SELECT s.*, r.room_number, u.name as gestionnaire_name 
-        FROM sales s 
-        JOIN rooms r ON s.room_id = r.room_id 
-        JOIN users u ON s.gestionnaire_id = u.id 
-        WHERE s.date BETWEEN ? AND ?
-        ORDER BY s.date DESC
-    ''', (start_date, end_date)).fetchall()
+    try:
+        # Get sales data for the selected period
+        cursor.execute('''
+            SELECT s.*, r.room_number, u.name as gestionnaire_name 
+            FROM sales s 
+            JOIN rooms r ON s.room_id = r.room_id 
+            JOIN users u ON s.gestionnaire_id = u.id 
+            WHERE s.date BETWEEN %s AND %s
+            ORDER BY s.date DESC
+        ''', (start_date, end_date))
+        sales = cursor.fetchall()
+        
+        # Get expenses data for the selected period
+        cursor.execute('''
+            SELECT e.*, u.name as gestionnaire_name 
+            FROM expenses e 
+            JOIN users u ON e.gestionnaire_id = u.id 
+            WHERE e.date BETWEEN %s AND %s
+            ORDER BY e.date DESC
+        ''', (start_date, end_date))
+        expenses = cursor.fetchall()
+        
+        # Calculate totals
+        cursor.execute(
+            'SELECT SUM(price) FROM sales WHERE date BETWEEN %s AND %s',
+            (start_date, end_date)
+        )
+        total_income_result = cursor.fetchone()['sum']
+        total_income = total_income_result if total_income_result else 0
+        
+        cursor.execute(
+            'SELECT SUM(amount) FROM expenses WHERE date BETWEEN %s AND %s',
+            (start_date, end_date)
+        )
+        total_expenses_result = cursor.fetchone()['sum']
+        total_expenses = total_expenses_result if total_expenses_result else 0
+        
+        net_profit = total_income - total_expenses
+        
+        # Create PDF
+        pdf_buffer = create_pdf_report(start_date, end_date, sales, expenses, total_income, total_expenses, net_profit)
+        
+        filename = f"rapport_hebdomadaire_{start_date}_a_{end_date}.pdf"
+        
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
     
-    # Get expenses data for the selected period
-    expenses = conn.execute('''
-        SELECT e.*, u.name as gestionnaire_name 
-        FROM expenses e 
-        JOIN users u ON e.gestionnaire_id = u.id 
-        WHERE e.date BETWEEN ? AND ?
-        ORDER BY e.date DESC
-    ''', (start_date, end_date)).fetchall()
-    
-    # Calculate totals
-    total_income = conn.execute(
-        'SELECT SUM(price) FROM sales WHERE date BETWEEN ? AND ?',
-        (start_date, end_date)
-    ).fetchone()[0] or 0
-    
-    total_expenses = conn.execute(
-        'SELECT SUM(amount) FROM expenses WHERE date BETWEEN ? AND ?',
-        (start_date, end_date)
-    ).fetchone()[0] or 0
-    
-    net_profit = total_income - total_expenses
-    
-    conn.close()
-    
-    # Create PDF
-    pdf_buffer = create_pdf_report(start_date, end_date, sales, expenses, total_income, total_expenses, net_profit)
-    
-    filename = f"rapport_hebdomadaire_{start_date}_a_{end_date}.pdf"
-    
-    return send_file(
-        pdf_buffer,
-        mimetype='application/pdf',
-        as_attachment=True,
-        download_name=filename
-    )
+    except Exception as e:
+        flash(f'Error generating PDF report: {str(e)}', 'danger')
+        return redirect(url_for('reports'))
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route('/download_weekly_report')
 @login_required(role='admin')
@@ -624,141 +720,172 @@ def download_weekly_report():
         return redirect(url_for('reports'))
     
     conn = get_db_connection()
+    cursor = conn.cursor()
     
-    # Get sales data for the selected period
-    sales = conn.execute('''
-        SELECT s.*, r.room_number, u.name as gestionnaire_name 
-        FROM sales s 
-        JOIN rooms r ON s.room_id = r.room_id 
-        JOIN users u ON s.gestionnaire_id = u.id 
-        WHERE s.date BETWEEN ? AND ?
-        ORDER BY s.date DESC
-    ''', (start_date, end_date)).fetchall()
+    try:
+        # Get sales data for the selected period
+        cursor.execute('''
+            SELECT s.*, r.room_number, u.name as gestionnaire_name 
+            FROM sales s 
+            JOIN rooms r ON s.room_id = r.room_id 
+            JOIN users u ON s.gestionnaire_id = u.id 
+            WHERE s.date BETWEEN %s AND %s
+            ORDER BY s.date DESC
+        ''', (start_date, end_date))
+        sales = cursor.fetchall()
+        
+        # Get expenses data for the selected period
+        cursor.execute('''
+            SELECT e.*, u.name as gestionnaire_name 
+            FROM expenses e 
+            JOIN users u ON e.gestionnaire_id = u.id 
+            WHERE e.date BETWEEN %s AND %s
+            ORDER BY e.date DESC
+        ''', (start_date, end_date))
+        expenses = cursor.fetchall()
+        
+        # Calculate totals
+        cursor.execute(
+            'SELECT SUM(price) FROM sales WHERE date BETWEEN %s AND %s',
+            (start_date, end_date)
+        )
+        total_income_result = cursor.fetchone()['sum']
+        total_income = total_income_result if total_income_result else 0
+        
+        cursor.execute(
+            'SELECT SUM(amount) FROM expenses WHERE date BETWEEN %s AND %s',
+            (start_date, end_date)
+        )
+        total_expenses_result = cursor.fetchone()['sum']
+        total_expenses = total_expenses_result if total_expenses_result else 0
+        
+        net_profit = total_income - total_expenses
+        
+        # Create CSV file in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow(['Rapport Hebdomadaire - Crescent Hotel'])
+        writer.writerow([f'Période: {start_date} à {end_date}'])
+        writer.writerow([])
+        
+        # Write sales section
+        writer.writerow(['VENTES'])
+        writer.writerow(['Date', 'Chambre', 'Gestionnaire', 'Type', 'Prix (BIF)', 'Statut'])
+        
+        for sale in sales:
+            writer.writerow([
+                sale['date'],
+                sale['room_number'],
+                sale['gestionnaire_name'],
+                sale['sale_type'].upper(),
+                f"{sale['price']:,.0f}",
+                sale['status']
+            ])
+        
+        writer.writerow([])
+        
+        # Write expenses section
+        writer.writerow(['DÉPENSES'])
+        writer.writerow(['Date', 'Gestionnaire', 'Raison', 'Montant (BIF)'])
+        
+        for expense in expenses:
+            writer.writerow([
+                expense['date'],
+                expense['gestionnaire_name'],
+                expense['reason'],
+                f"{expense['amount']:,.0f}"
+            ])
+        
+        writer.writerow([])
+        
+        # Write summary
+        writer.writerow(['RÉSUMÉ'])
+        writer.writerow(['Revenu Total:', f"{total_income:,.0f} BIF"])
+        writer.writerow(['Dépenses Total:', f"{total_expenses:,.0f} BIF"])
+        writer.writerow(['Profit Net:', f"{net_profit:,.0f} BIF"])
+        writer.writerow([])
+        writer.writerow(['Généré le:', datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+        
+        # Prepare file for download
+        output.seek(0)
+        
+        filename = f"rapport_hebdomadaire_{start_date}_a_{end_date}.csv"
+        
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=filename
+        )
     
-    # Get expenses data for the selected period
-    expenses = conn.execute('''
-        SELECT e.*, u.name as gestionnaire_name 
-        FROM expenses e 
-        JOIN users u ON e.gestionnaire_id = u.id 
-        WHERE e.date BETWEEN ? AND ?
-        ORDER BY e.date DESC
-    ''', (start_date, end_date)).fetchall()
-    
-    # Calculate totals
-    total_income = conn.execute(
-        'SELECT SUM(price) FROM sales WHERE date BETWEEN ? AND ?',
-        (start_date, end_date)
-    ).fetchone()[0] or 0
-    
-    total_expenses = conn.execute(
-        'SELECT SUM(amount) FROM expenses WHERE date BETWEEN ? AND ?',
-        (start_date, end_date)
-    ).fetchone()[0] or 0
-    
-    net_profit = total_income - total_expenses
-    
-    conn.close()
-    
-    # Create CSV file in memory
-    output = io.StringIO()
-    writer = csv.writer(output)
-    
-    # Write header
-    writer.writerow(['Rapport Hebdomadaire - Crescent Hotel'])
-    writer.writerow([f'Période: {start_date} à {end_date}'])
-    writer.writerow([])
-    
-    # Write sales section
-    writer.writerow(['VENTES'])
-    writer.writerow(['Date', 'Chambre', 'Gestionnaire', 'Type', 'Prix (BIF)', 'Statut'])
-    
-    for sale in sales:
-        writer.writerow([
-            sale['date'],
-            sale['room_number'],
-            sale['gestionnaire_name'],
-            sale['sale_type'].upper(),
-            f"{sale['price']:,.0f}",
-            sale['status']
-        ])
-    
-    writer.writerow([])
-    
-    # Write expenses section
-    writer.writerow(['DÉPENSES'])
-    writer.writerow(['Date', 'Gestionnaire', 'Raison', 'Montant (BIF)'])
-    
-    for expense in expenses:
-        writer.writerow([
-            expense['date'],
-            expense['gestionnaire_name'],
-            expense['reason'],
-            f"{expense['amount']:,.0f}"
-        ])
-    
-    writer.writerow([])
-    
-    # Write summary
-    writer.writerow(['RÉSUMÉ'])
-    writer.writerow(['Revenu Total:', f"{total_income:,.0f} BIF"])
-    writer.writerow(['Dépenses Total:', f"{total_expenses:,.0f} BIF"])
-    writer.writerow(['Profit Net:', f"{net_profit:,.0f} BIF"])
-    writer.writerow([])
-    writer.writerow(['Généré le:', datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
-    
-    # Prepare file for download
-    output.seek(0)
-    
-    filename = f"rapport_hebdomadaire_{start_date}_a_{end_date}.csv"
-    
-    return send_file(
-        io.BytesIO(output.getvalue().encode('utf-8')),
-        mimetype='text/csv',
-        as_attachment=True,
-        download_name=filename
-    )
+    except Exception as e:
+        flash(f'Error generating CSV report: {str(e)}', 'danger')
+        return redirect(url_for('reports'))
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route('/delete_report/<string:report_type>/<int:report_id>')
 @login_required(role='admin')
 def delete_report(report_type, report_id):
     conn = get_db_connection()
+    cursor = conn.cursor()
     
-    if report_type == 'sale':
-        # Get the sale record to find the room_id
-        sale = conn.execute('SELECT * FROM sales WHERE id = ?', (report_id,)).fetchone()
-        if sale:
-            # Update room status back to available
-            conn.execute('UPDATE rooms SET status = "available" WHERE room_id = ?', (sale['room_id'],))
-            # Delete the sale record
-            conn.execute('DELETE FROM sales WHERE id = ?', (report_id,))
-            flash('Sale report deleted successfully! Room status updated to available.', 'success')
+    try:
+        if report_type == 'sale':
+            # Get the sale record to find the room_id
+            cursor.execute('SELECT * FROM sales WHERE id = %s', (report_id,))
+            sale = cursor.fetchone()
+            if sale:
+                # Update room status back to available
+                cursor.execute('UPDATE rooms SET status = %s WHERE room_id = %s', ('available', sale['room_id']))
+                # Delete the sale record
+                cursor.execute('DELETE FROM sales WHERE id = %s', (report_id,))
+                conn.commit()
+                flash('Sale report deleted successfully! Room status updated to available.', 'success')
+            else:
+                flash('Sale report not found!', 'danger')
+        elif report_type == 'expense':
+            cursor.execute('DELETE FROM expenses WHERE id = %s', (report_id,))
+            conn.commit()
+            flash('Expense report deleted successfully!', 'success')
         else:
-            flash('Sale report not found!', 'danger')
-    elif report_type == 'expense':
-        conn.execute('DELETE FROM expenses WHERE id = ?', (report_id,))
-        flash('Expense report deleted successfully!', 'success')
-    else:
-        flash('Invalid report type!', 'danger')
-        conn.close()
-        return redirect(url_for('reports'))
+            flash('Invalid report type!', 'danger')
+            return redirect(url_for('reports'))
     
-    conn.commit()
-    conn.close()
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error deleting report: {str(e)}', 'danger')
+    finally:
+        cursor.close()
+        conn.close()
+    
     return redirect(url_for('reports'))
 
 @app.route('/users')
 @login_required(role='admin')
 def users():
     conn = get_db_connection()
-    users_list = conn.execute('SELECT * FROM users WHERE id != ? ORDER BY name', (session['user_id'],)).fetchall()
-    conn.close()
+    cursor = conn.cursor()
     
-    return render_template('users.html', users=users_list)
+    try:
+        cursor.execute('SELECT * FROM users WHERE id != %s ORDER BY name', (session['user_id'],))
+        users_list = cursor.fetchall()
+        return render_template('users.html', users=users_list)
+    except Exception as e:
+        flash(f'Error loading users: {str(e)}', 'danger')
+        return redirect(url_for('dashboard'))
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
 @login_required(role='admin')
 def edit_user(user_id):
     conn = get_db_connection()
+    cursor = conn.cursor()
     
     if request.method == 'POST':
         name = request.form['name']
@@ -767,32 +894,45 @@ def edit_user(user_id):
         
         try:
             if password:
-                conn.execute(
-                    'UPDATE users SET name = ?, role = ?, password = ? WHERE id = ?',
+                cursor.execute(
+                    'UPDATE users SET name = %s, role = %s, password = %s WHERE id = %s',
                     (name, role, password, user_id)
                 )
             else:
-                conn.execute(
-                    'UPDATE users SET name = ?, role = ? WHERE id = ?',
+                cursor.execute(
+                    'UPDATE users SET name = %s, role = %s WHERE id = %s',
                     (name, role, user_id)
                 )
             conn.commit()
             flash('User updated successfully!', 'success')
-        except sqlite3.IntegrityError:
-            flash('Username already exists!', 'danger')
+        except Exception as e:
+            conn.rollback()
+            if 'unique constraint' in str(e).lower():
+                flash('Username already exists!', 'danger')
+            else:
+                flash(f'Error updating user: {str(e)}', 'danger')
         finally:
+            cursor.close()
             conn.close()
         
         return redirect(url_for('users'))
     
-    user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
-    conn.close()
+    try:
+        cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            flash('User not found!', 'danger')
+            return redirect(url_for('users'))
+        
+        return render_template('edit_user.html', user=user)
     
-    if not user:
-        flash('User not found!', 'danger')
+    except Exception as e:
+        flash(f'Error loading user: {str(e)}', 'danger')
         return redirect(url_for('users'))
-    
-    return render_template('edit_user.html', user=user)
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route('/delete_user/<int:user_id>')
 @login_required(role='admin')
@@ -802,19 +942,29 @@ def delete_user(user_id):
         return redirect(url_for('users'))
     
     conn = get_db_connection()
+    cursor = conn.cursor()
     
-    # Check if user has any sales or expenses
-    sales_count = conn.execute('SELECT COUNT(*) FROM sales WHERE gestionnaire_id = ?', (user_id,)).fetchone()[0]
-    expenses_count = conn.execute('SELECT COUNT(*) FROM expenses WHERE gestionnaire_id = ?', (user_id,)).fetchone()[0]
+    try:
+        # Check if user has any sales or expenses
+        cursor.execute('SELECT COUNT(*) FROM sales WHERE gestionnaire_id = %s', (user_id,))
+        sales_count = cursor.fetchone()['count']
+        cursor.execute('SELECT COUNT(*) FROM expenses WHERE gestionnaire_id = %s', (user_id,))
+        expenses_count = cursor.fetchone()['count']
+        
+        if sales_count > 0 or expenses_count > 0:
+            flash('Cannot delete user with existing sales or expenses records!', 'danger')
+        else:
+            cursor.execute('DELETE FROM users WHERE id = %s', (user_id,))
+            conn.commit()
+            flash('User deleted successfully!', 'success')
     
-    if sales_count > 0 or expenses_count > 0:
-        flash('Cannot delete user with existing sales or expenses records!', 'danger')
-    else:
-        conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
-        conn.commit()
-        flash('User deleted successfully!', 'success')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error deleting user: {str(e)}', 'danger')
+    finally:
+        cursor.close()
+        conn.close()
     
-    conn.close()
     return redirect(url_for('users'))
 
 @app.route('/add_user', methods=['GET', 'POST'])
@@ -826,17 +976,23 @@ def add_user():
         password = request.form['password']
         
         conn = get_db_connection()
+        cursor = conn.cursor()
         
         try:
-            conn.execute(
-                'INSERT INTO users (name, role, password) VALUES (?, ?, ?)',
+            cursor.execute(
+                'INSERT INTO users (name, role, password) VALUES (%s, %s, %s)',
                 (name, role, password)
             )
             conn.commit()
             flash(f'User {name} added successfully!', 'success')
-        except sqlite3.IntegrityError:
-            flash(f'User {name} already exists.', 'danger')
+        except Exception as e:
+            conn.rollback()
+            if 'unique constraint' in str(e).lower():
+                flash(f'User {name} already exists.', 'danger')
+            else:
+                flash(f'Error adding user: {str(e)}', 'danger')
         finally:
+            cursor.close()
             conn.close()
         
         return redirect(url_for('add_user'))
