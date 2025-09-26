@@ -1,7 +1,7 @@
 {
-    "name": "My Hotel ",
-    "short_name": "MytHotel",
-    "description": "Hotel room management system ",
+    "name": "Crescent Hotel Management",
+    "short_name": "CrescentHotel",
+    "description": "Hotel room management system for Crescent Hotel",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#ffffff",

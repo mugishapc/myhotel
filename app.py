@@ -13,8 +13,6 @@ from reportlab.lib.units import inch
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import os
-from flask import send_from_directory
-from flask import Response, jsonify
 
 app = Flask(__name__)
 app.secret_key = 'd29c234ca310aa6990092d4b6cd4c4854585c51e1f73bf4de510adca03f5bc4e'
@@ -44,11 +42,11 @@ def login_required(role=None):
 # PWA Manifest and Service Worker Routes
 @app.route('/manifest.json')
 def manifest():
-    return send_from_directory('static', 'manifest.json')
+    return send_file('manifest.json', mimetype='application/json')
 
 @app.route('/sw.js')
 def service_worker():
-    return send_from_directory('static', 'sw.js')
+    return send_file('sw.js', mimetype='application/javascript')
 
 @app.route('/offline')
 def offline():
@@ -83,7 +81,7 @@ def login():
     return render_template('login.html')
 
 @app.route('/dashboard')
-@login_required
+@login_required()
 def dashboard():
     conn = get_db_connection()
     
@@ -129,18 +127,14 @@ def dashboard():
         'profit': profit
     }
     
-    if session.get('role') == 'admin':
+    if session['role'] == 'admin':
         return render_template('admin_dashboard.html', stats=stats)
     else:
         return render_template('gestionnaire_dashboard.html', stats=stats)
 
 @app.route('/sell_room', methods=['POST'])
-@login_required()
+@login_required(role='gestionnaire')
 def sell_room():
-    if session['role'] != 'gestionnaire':
-        flash('Access denied. Only gestionnaires can sell rooms.', 'danger')
-        return redirect(url_for('dashboard'))
-    
     room_number = request.form['room_number']
     sale_type = request.form['sale_type']  # 'full' or 'passage'
     
@@ -185,12 +179,8 @@ def sell_room():
     return redirect(url_for('dashboard'))
 
 @app.route('/restore_room', methods=['POST'])
-@login_required()
+@login_required(role='gestionnaire')
 def restore_room():
-    if session['role'] != 'gestionnaire':
-        flash('Access denied. Only gestionnaires can restore rooms.', 'danger')
-        return redirect(url_for('dashboard'))
-    
     room_number = request.form['room_number']
     
     conn = get_db_connection()
@@ -234,12 +224,8 @@ def restore_room():
     return redirect(url_for('dashboard'))
 
 @app.route('/add_expense', methods=['POST'])
-@login_required()
+@login_required(role='gestionnaire')
 def add_expense():
-    if session['role'] != 'gestionnaire':
-        flash('Access denied. Only gestionnaires can add expenses.', 'danger')
-        return redirect(url_for('dashboard'))
-    
     reason = request.form['reason']
     amount = float(request.form['amount'])
     
@@ -267,12 +253,8 @@ def rooms():
     return render_template('rooms.html', rooms=rooms)
 
 @app.route('/add_room', methods=['POST'])
-@login_required()
+@login_required(role='admin')
 def add_room():
-    if session['role'] != 'admin':
-        flash('Access denied. Only admin can add rooms.', 'danger')
-        return redirect(url_for('rooms'))
-    
     room_number = request.form['room_number']
     price_full = float(request.form['price_full'])
     price_passage = float(request.form['price_passage'])
@@ -299,12 +281,8 @@ def add_room():
     return redirect(url_for('rooms'))
 
 @app.route('/delete_room/<int:room_id>')
-@login_required()
+@login_required(role='admin')
 def delete_room(room_id):
-    if session['role'] != 'admin':
-        flash('Access denied. Only admin can delete rooms.', 'danger')
-        return redirect(url_for('rooms'))
-    
     conn = get_db_connection()
     
     # Check if room is sold
@@ -578,12 +556,8 @@ def create_pdf_report(start_date, end_date, sales, expenses, total_income, total
     return buffer
 
 @app.route('/download_pdf_report')
-@login_required()
+@login_required(role='admin')
 def download_pdf_report():
-    if session['role'] != 'admin':
-        flash('Access denied. Only admin can download reports.', 'danger')
-        return redirect(url_for('reports'))
-    
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     
@@ -640,12 +614,8 @@ def download_pdf_report():
     )
 
 @app.route('/download_weekly_report')
-@login_required()
+@login_required(role='admin')
 def download_weekly_report():
-    if session['role'] != 'admin':
-        flash('Access denied. Only admin can download reports.', 'danger')
-        return redirect(url_for('reports'))
-    
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     
@@ -749,12 +719,8 @@ def download_weekly_report():
     )
 
 @app.route('/delete_report/<string:report_type>/<int:report_id>')
-@login_required()
+@login_required(role='admin')
 def delete_report(report_type, report_id):
-    if session['role'] != 'admin':
-        flash('Access denied. Only admin can delete reports.', 'danger')
-        return redirect(url_for('reports'))
-    
     conn = get_db_connection()
     
     if report_type == 'sale':
@@ -781,12 +747,8 @@ def delete_report(report_type, report_id):
     return redirect(url_for('reports'))
 
 @app.route('/users')
-@login_required()
+@login_required(role='admin')
 def users():
-    if session['role'] != 'admin':
-        flash('Access denied. Only admin can manage users.', 'danger')
-        return redirect(url_for('dashboard'))
-    
     conn = get_db_connection()
     users_list = conn.execute('SELECT * FROM users WHERE id != ? ORDER BY name', (session['user_id'],)).fetchall()
     conn.close()
@@ -794,12 +756,8 @@ def users():
     return render_template('users.html', users=users_list)
 
 @app.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
-@login_required()
+@login_required(role='admin')
 def edit_user(user_id):
-    if session['role'] != 'admin':
-        flash('Access denied. Only admin can edit users.', 'danger')
-        return redirect(url_for('dashboard'))
-    
     conn = get_db_connection()
     
     if request.method == 'POST':
@@ -837,12 +795,8 @@ def edit_user(user_id):
     return render_template('edit_user.html', user=user)
 
 @app.route('/delete_user/<int:user_id>')
-@login_required()
+@login_required(role='admin')
 def delete_user(user_id):
-    if session['role'] != 'admin':
-        flash('Access denied. Only admin can delete users.', 'danger')
-        return redirect(url_for('dashboard'))
-    
     if user_id == session['user_id']:
         flash('You cannot delete your own account!', 'danger')
         return redirect(url_for('users'))
@@ -864,12 +818,8 @@ def delete_user(user_id):
     return redirect(url_for('users'))
 
 @app.route('/add_user', methods=['GET', 'POST'])
-@login_required()
+@login_required(role='admin')
 def add_user():
-    if session['role'] != 'admin':
-        flash('Access denied. Only admin can add users.', 'danger')
-        return redirect(url_for('dashboard'))
-    
     if request.method == 'POST':
         name = request.form['name']
         role = request.form['role']
@@ -900,4 +850,4 @@ def logout():
     return redirect(url_for('login'))
 
 if __name__ == '__main__':
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    app.run(debug=True, host='0.0.0.0')

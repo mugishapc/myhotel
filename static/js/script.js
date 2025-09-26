@@ -1,124 +1,195 @@
-
-// Enhanced JavaScript for PWA functionality
+// Enhanced JavaScript with click animations
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('Crescent Hotel App Loaded');
+    
+    // 1. Auto-dismiss alerts after 5 seconds
+    initAlerts();
+    
+    // 2. Button click animations
+    initButtonAnimations();
+    
+    // 3. Form loading states
+    initFormLoading();
+    
+    // 4. Safe PWA features
+    initPWA();
+});
+
+function initAlerts() {
     // Auto-dismiss alerts after 5 seconds
     setTimeout(function() {
         const alerts = document.querySelectorAll('.alert');
         alerts.forEach(function(alert) {
-            const bsAlert = new bootstrap.Alert(alert);
-            bsAlert.close();
+            try {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            } catch (error) {
+                alert.style.display = 'none';
+            }
         });
     }, 5000);
+}
+
+function initButtonAnimations() {
+    // Add click animations to ALL buttons
+    document.addEventListener('click', function(e) {
+        // Check if it's a button or link with btn class
+        if (e.target.tagName === 'BUTTON' || 
+            e.target.classList.contains('btn') ||
+            e.target.closest('button') ||
+            e.target.closest('.btn')) {
+            
+            let button = e.target;
+            
+            // If clicked on inner element, find the parent button
+            if (!button.classList.contains('btn') && button.tagName !== 'BUTTON') {
+                button = button.closest('button') || button.closest('.btn');
+            }
+            
+            if (button) {
+                // Add pressing effect
+                button.style.transform = 'scale(0.95)';
+                button.style.transition = 'transform 0.1s ease';
+                
+                // Add ripple effect
+                createRippleEffect(button, e);
+                
+                // Restore after animation
+                setTimeout(() => {
+                    button.style.transform = 'scale(1)';
+                }, 150);
+            }
+        }
+    });
+}
+
+function createRippleEffect(button, event) {
+    // Remove existing ripples
+    const existingRipples = button.querySelectorAll('.ripple');
+    existingRipples.forEach(ripple => ripple.remove());
     
-    // Form validation enhancement
+    // Create ripple element
+    const ripple = document.createElement('span');
+    ripple.classList.add('ripple');
+    
+    // Get button position and click coordinates
+    const rect = button.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    const x = event.clientX - rect.left - size / 2;
+    const y = event.clientY - rect.top - size / 2;
+    
+    // Style the ripple
+    ripple.style.width = ripple.style.height = size + 'px';
+    ripple.style.left = x + 'px';
+    ripple.style.top = y + 'px';
+    
+    // Add to button
+    button.style.position = 'relative';
+    button.style.overflow = 'hidden';
+    button.appendChild(ripple);
+    
+    // Remove ripple after animation
+    setTimeout(() => {
+        if (ripple.parentNode === button) {
+            button.removeChild(ripple);
+        }
+    }, 600);
+}
+
+function initFormLoading() {
+    // Add loading states to form buttons
     const forms = document.querySelectorAll('form');
     forms.forEach(function(form) {
         form.addEventListener('submit', function(event) {
-            if (!form.checkValidity()) {
-                event.preventDefault();
-                event.stopPropagation();
-            }
-            form.classList.add('was-validated');
-        });
-    });
-
-    // Add app-like interactions
-    addAppLikeInteractions();
-});
-
-function addAppLikeInteractions() {
-    // Add loading states to buttons
-    const buttons = document.querySelectorAll('button[type="submit"], .btn-primary, .btn-success');
-    buttons.forEach(button => {
-        button.addEventListener('click', function(e) {
-            if (this.type === 'submit' || this.classList.contains('btn-primary') || this.classList.contains('btn-success')) {
-                // Add loading spinner
-                const originalText = this.innerHTML;
-                this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Loading...';
-                this.disabled = true;
-                
-                // Restore after 2 seconds if still on same page
-                setTimeout(() => {
-                    if (this.innerHTML.includes('spinner-border')) {
-                        this.innerHTML = originalText;
-                        this.disabled = false;
-                    }
-                }, 2000);
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton) {
+                // Don't prevent default form submission
+                addLoadingState(submitButton);
             }
         });
-    });
-
-    // Prevent double clicks
-    let lastClickTime = 0;
-    document.addEventListener('click', function(e) {
-        const currentTime = new Date().getTime();
-        if (currentTime - lastClickTime < 1000) {
-            e.preventDefault();
-            e.stopPropagation();
-            return;
-        }
-        lastClickTime = currentTime;
-    });
-
-    // Add touch feedback
-    document.addEventListener('touchstart', function() {}, { passive: true });
-
-    // Handle online/offline status
-    window.addEventListener('online', function() {
-        showNotification('Connection restored', 'success');
-    });
-
-    window.addEventListener('offline', function() {
-        showNotification('You are offline', 'warning');
     });
 }
 
-function showNotification(message, type) {
-    // Create notification element
-    const notification = document.createElement('div');
-    notification.className = `alert alert-${type} position-fixed top-0 start-50 translate-middle-x mt-3`;
-    notification.style.zIndex = '1060';
-    notification.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+function addLoadingState(button) {
+    const originalHTML = button.innerHTML;
+    
+    // Add spinner and change text
+    button.innerHTML = `
+        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+        Processing...
     `;
+    button.disabled = true;
     
-    document.body.appendChild(notification);
-    
-    // Auto remove after 3 seconds
+    // Safety: restore after 5 seconds if still loading
     setTimeout(() => {
-        if (notification.parentNode) {
-            notification.parentNode.removeChild(notification);
+        if (button.innerHTML.includes('spinner-border')) {
+            button.innerHTML = originalHTML;
+            button.disabled = false;
         }
-    }, 3000);
+    }, 5000);
 }
 
-// Request device permissions for PWA
-if ('serviceWorker' in navigator && 'Notification' in window) {
-    Notification.requestPermission().then(permission => {
-        if (permission === 'granted') {
-            console.log('Notification permission granted');
-        }
-    });
+function initPWA() {
+    // Optional PWA features
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+                console.log('PWA Service Worker registered');
+            })
+            .catch(error => {
+                console.log('PWA not available');
+            });
+    }
 }
 
-// Handle app launch
-if (window.matchMedia('(display-mode: standalone)').matches) {
-    document.body.classList.add('standalone');
+// Add CSS for animations
+const style = document.createElement('style');
+style.textContent = `
+    /* Ripple effect styles */
+    .ripple {
+        position: absolute;
+        border-radius: 50%;
+        background-color: rgba(255, 255, 255, 0.7);
+        transform: scale(0);
+        animation: ripple-animation 0.6s linear;
+        pointer-events: none;
+    }
     
-    // Add standalone specific styles
-    const style = document.createElement('style');
-    style.textContent = `
-        .standalone body {
-            padding-top: env(safe-area-inset-top);
-            padding-bottom: env(safe-area-inset-bottom);
-            padding-left: env(safe-area-inset-left);
-            padding-right: env(safe-area-inset-right);
+    @keyframes ripple-animation {
+        to {
+            transform: scale(4);
+            opacity: 0;
         }
-        
-        .standalone .navbar {
-            padding-top: env(safe-area-inset-top);
-        }
-    `;
-    document.head.appendChild(style);
-}
+    }
+    
+    /* Button animations */
+    .btn {
+        transition: all 0.3s ease !important;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .btn:active {
+        transform: scale(0.95);
+    }
+    
+    /* Spinner styles */
+    .spinner-border-sm {
+        width: 1rem;
+        height: 1rem;
+    }
+    
+    /* Enhanced focus states */
+    .btn:focus {
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+    
+    /* Hover effects */
+    .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+`;
+document.head.appendChild(style);
+
+console.log('Button animations loaded - Click any button to see effects!');

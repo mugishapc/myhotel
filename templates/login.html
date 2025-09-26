@@ -1,42 +1,47 @@
 {% extends "base.html" %}
 
-{% block title %}Login{% endblock %}
+{% block title %}Login - Crescent Hotel{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="mb-0">Login to Crescent Hotel</h4>
-            </div>
-            <div class="card-body">
-                <!-- Flash messages -->
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card shadow">
+            <div class="card-body p-4">
+                <div class="text-center mb-4">
+                    <img src="{{ url_for('static', filename='icons/icon-96x96.png') }}" 
+                         alt="Crescent Hotel" width="64" height="64" class="mb-3">
+                    <h2 class="card-title">Crescent Hotel</h2>
+                    <p class="text-muted">Please sign in to continue</p>
+                </div>
                 
-                <form method="POST" action="{{ url_for('login') }}">
+                <form method="POST" action="{{ url_for('login') }}" novalidate>
                     <div class="mb-3">
                         <label for="username" class="form-label">Username</label>
-                        <input type="text" class="form-control" id="username" name="username" required autofocus>
+                        <input type="text" class="form-control" id="username" name="username" 
+                               required autofocus>
+                        <div class="invalid-feedback">
+                            Please enter your username.
+                        </div>
                     </div>
+                    
                     <div class="mb-3">
                         <label for="password" class="form-label">Password</label>
-                        <input type="password" class="form-control" id="password" name="password" required>
+                        <input type="password" class="form-control" id="password" name="password" 
+                               required>
+                        <div class="invalid-feedback">
+                            Please enter your password.
+                        </div>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">Login</button>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">Sign In</button>
+                    </div>
                 </form>
-                <div class="mt-3">
-                    <p class="text-danger">ONLY HOTEL'S OWNER CAN LOGIN FIRST AND CREATE ACCOUNTS FOR HIS WORKERS.</p>
-                    <p class="text-info">Default admin account: username: <strong>admin</strong>, password: <strong>admin123</strong></p>
-                    <p class="text-info">Default gestionnaire account: username: <strong>gestionnaire</strong>, password: <strong>gest123</strong></p>
+                
+                <div class="mt-3 text-center">
+                    <small class="text-muted">
+                        Default admin: Crescent / Crescent12#
+                    </small>
                 </div>
             </div>
         </div>

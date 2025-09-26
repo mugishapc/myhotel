@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Add User - Crescent Hotel{% endblock %}
+{% block title %}Add Room - Crescent Hotel{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
-                <h4 class="card-title mb-0">Add New User</h4>
+                <h4 class="card-title mb-0">Add New Room</h4>
             </div>
             <div class="card-body">
                 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -21,29 +21,25 @@
                     {% endif %}
                 {% endwith %}
 
-                <form method="POST" action="{{ url_for('add_user') }}">
+                <form method="POST" action="{{ url_for('add_room') }}">
                     <div class="mb-3">
-                        <label for="name" class="form-label">Username</label>
-                        <input type="text" class="form-control" id="name" name="name" required>
+                        <label for="room_number" class="form-label">Room Number</label>
+                        <input type="number" class="form-control" id="room_number" name="room_number" required min="1">
                     </div>
                     
                     <div class="mb-3">
-                        <label for="role" class="form-label">Role</label>
-                        <select class="form-control" id="role" name="role" required>
-                            <option value="">Select Role</option>
-                            <option value="admin">Admin</option>
-                            <option value="gestionnaire">Gestionnaire</option>
-                        </select>
+                        <label for="price_full" class="form-label">Full Price (BIF)</label>
+                        <input type="number" class="form-control" id="price_full" name="price_full" required min="0" step="0.01">
                     </div>
                     
                     <div class="mb-3">
-                        <label for="password" class="form-label">Password</label>
-                        <input type="password" class="form-control" id="password" name="password" required>
+                        <label for="price_passage" class="form-label">Passage Price (BIF)</label>
+                        <input type="number" class="form-control" id="price_passage" name="price_passage" required min="0" step="0.01">
                     </div>
                     
                     <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-primary">Add User</button>
-                        <a href="{{ url_for('users') }}" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Add Room</button>
+                        <a href="{{ url_for('rooms') }}" class="btn btn-secondary">Cancel</a>
                     </div>
                 </form>
             </div>
