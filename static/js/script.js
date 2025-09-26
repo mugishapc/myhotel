@@ -1,3 +1,4 @@
+
 // Enhanced JavaScript for PWA functionality
 document.addEventListener('DOMContentLoaded', function() {
     // Auto-dismiss alerts after 5 seconds
