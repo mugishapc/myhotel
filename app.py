@@ -17,23 +17,33 @@ import os
 app = Flask(__name__)
 app.secret_key = 'd29c234ca310aa6990092d4b6cd4c4854585c51e1f73bf4de510adca03f5bc4e'
 
-# ADD CACHE CONTROL HEADERS
+# FIXED: Proper static file handling for Render
+app.static_folder = 'static'
+app.static_url_path = '/static'
+
+# FIXED: Add proper CORS and security headers
 @app.after_request
 def add_header(response):
-    # Prevent caching
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '-1'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
     return response
 
 # Initialize database
-init_db()
+try:
+    init_db()
+    print("✅ Database initialized successfully")
+except Exception as e:
+    print(f"❌ Database initialization error: {e}")
 
-# Register fonts (optional - for better formatting)
+# Register fonts (optional)
 try:
     pdfmetrics.registerFont(TTFont('Helvetica', 'Helvetica.ttf'))
 except:
-    pass  # Use default font if Helvetica not available
+    pass
 
 def login_required(role=None):
     def decorator(f):
@@ -48,7 +58,11 @@ def login_required(role=None):
         return decorated_function
     return decorator
 
-# PWA Manifest and Service Worker Routes
+# FIXED: Proper static file routes for PWA
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    return send_file(os.path.join('static', filename))
+
 @app.route('/manifest.json')
 def manifest():
     return send_file('manifest.json', mimetype='application/json')
@@ -61,9 +75,24 @@ def service_worker():
 def offline():
     return render_template('offline.html')
 
+# FIXED: Root route with proper error handling
 @app.route('/')
 def index():
-    return redirect(url_for('login'))
+    try:
+        return redirect(url_for('login'))
+    except Exception as e:
+        return f"Error: {e}", 500
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Render"""
+    try:
+        conn = get_db_connection()
+        conn.close()
+        return jsonify({"status": "healthy", "database": "connected"})
+    except Exception as e:
+        return jsonify({"status": "unhealthy", "error": str(e)}), 500
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -1015,5 +1044,6 @@ def logout():
     return redirect(url_for('login'))
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))  # Render sets PORT automatically
-    app.run(host='0.0.0.0', port=port)
+    port = int(os.environ.get("PORT", 5000))
+    # Use 0.0.0.0 to accept connections from all IPs (required for Render)
+    app.run(host='0.0.0.0', port=port, debug=False)
