@@ -1,6 +1,6 @@
-// Crescent Hotel App - PROPER FIX with PWA support
+// Crescent Hotel App - SAFE PWA IMPLEMENTATION
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Crescent Hotel App loaded - PWA enabled');
+    console.log('Crescent Hotel App loaded - Safe PWA enabled');
     
     // Add the CSS for 3 dots animation
     const style = document.createElement('style');
@@ -34,6 +34,15 @@ document.addEventListener('DOMContentLoaded', function() {
             bottom: 20px;
             right: 20px;
             z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        .cache-clear-btn {
+            position: fixed;
+            bottom: 70px;
+            right: 20px;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
         }
     `;
     document.head.appendChild(style);
@@ -82,8 +91,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Initialize PWA with proper error handling
-    initializePWA();
+    // Initialize Safe PWA
+    initializeSafePWA();
 });
 
 function showThreeDots(button) {
@@ -110,30 +119,54 @@ function showThreeDots(button) {
     }, 3000);
 }
 
-// PROPER PWA INITIALIZATION
-function initializePWA() {
+// SAFE PWA INITIALIZATION
+function initializeSafePWA() {
     if ('serviceWorker' in navigator) {
-        // Register service worker with proper scope
-        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        // Register service worker with error handling
+        navigator.serviceWorker.register('/sw.js?v=3.0', { scope: '/' })
             .then(function(registration) {
                 console.log('ServiceWorker registered successfully:', registration);
                 
-                // Check for updates every time the app loads
-                registration.update();
+                // Check for updates every hour
+                setInterval(() => {
+                    registration.update();
+                }, 60 * 60 * 1000);
                 
-                // Handle controller change (when SW updates)
-                navigator.serviceWorker.addEventListener('controllerchange', function() {
-                    window.location.reload();
+                // Handle updates
+                registration.addEventListener('updatefound', () => {
+                    const newWorker = registration.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            showUpdateNotification();
+                        }
+                    });
                 });
             })
             .catch(function(error) {
                 console.log('ServiceWorker registration failed:', error);
+                // If registration fails, clear any existing workers
+                clearProblematicServiceWorkers();
             });
+        
+        // Handle controller changes (app updates)
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            console.log('Controller changed, reloading page...');
+            window.location.reload();
+        });
     }
     
-    // Add install prompt for PWA
+    // Add install prompt
+    setupInstallPrompt();
+    
+    // Add cache clear button for safety
+    addCacheClearButton();
+}
+
+// INSTALL PROMPT SETUP
+function setupInstallPrompt() {
     let deferredPrompt;
     const installBtn = document.createElement('button');
+    installBtn.id = 'installPWA';
     installBtn.innerHTML = '📱 Install App';
     installBtn.className = 'btn btn-success install-btn';
     installBtn.style.display = 'none';
@@ -148,31 +181,77 @@ function initializePWA() {
             deferredPrompt.prompt();
             deferredPrompt.userChoice.then((choiceResult) => {
                 if (choiceResult.outcome === 'accepted') {
-                    console.log('User accepted install');
+                    console.log('User accepted PWA installation');
                 }
                 deferredPrompt = null;
             });
         };
     });
     
+    window.addEventListener('appinstalled', () => {
+        console.log('PWA was installed');
+        installBtn.style.display = 'none';
+        deferredPrompt = null;
+    });
+    
     document.body.appendChild(installBtn);
 }
 
-// Clear cache function (for manual cache clearing if needed)
+// CACHE CLEAR BUTTON FOR SAFETY
+function addCacheClearButton() {
+    const clearBtn = document.createElement('button');
+    clearBtn.id = 'clearCache';
+    clearBtn.innerHTML = '🔄 Clear Cache';
+    clearBtn.className = 'btn btn-warning cache-clear-btn';
+    clearBtn.style.display = 'block';
+    
+    clearBtn.onclick = () => {
+        if (confirm('Clear app cache? This will reload the page.')) {
+            clearAppCache();
+        }
+    };
+    
+    document.body.appendChild(clearBtn);
+}
+
+// SAFE CACHE CLEARING
 function clearAppCache() {
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            for (let registration of registrations) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+            registrations.forEach(registration => {
                 registration.unregister();
-            }
+            });
         });
-        
-        caches.keys().then(function(cacheNames) {
-            cacheNames.forEach(function(cacheName) {
+    }
+    
+    if ('caches' in window) {
+        caches.keys().then(cacheNames => {
+            cacheNames.forEach(cacheName => {
                 caches.delete(cacheName);
             });
-        }).then(() => {
-            window.location.reload();
         });
+    }
+    
+    // Reload after a short delay
+    setTimeout(() => {
+        window.location.reload(true);
+    }, 1000);
+}
+
+// CLEAR PROBLEMATIC SERVICE WORKERS
+function clearProblematicServiceWorkers() {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+            registrations.forEach(registration => {
+                registration.unregister();
+            });
+        });
+    }
+}
+
+// UPDATE NOTIFICATION
+function showUpdateNotification() {
+    if (confirm('A new version is available. Reload to update?')) {
+        window.location.reload();
     }
 }

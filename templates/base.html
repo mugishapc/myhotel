@@ -4,39 +4,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <!-- CACHE CONTROL META TAGS -->
+    <!-- SAFE CACHE CONTROL -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <!-- PWA Manifest -->
+    <!-- PWA CONFIGURATION -->
     <meta name="theme-color" content="#007bff">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Crescent Hotel">
-    <link rel="manifest" href="{{ url_for('manifest') }}?v=1.3">
+    <link rel="manifest" href="{{ url_for('manifest') }}?v=3.0">
     
     <title>Crescent Hotel - {% block title %}{% endblock %}</title>
     
-    <!-- Favicon and Icons -->
-    <link rel="icon" href="{{ url_for('static', filename='icons/icon-32x32.png') }}?v=1.3" sizes="32x32" type="image/png">
-    <link rel="icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}?v=1.3" sizes="192x192" type="image/png">
-    <link rel="icon" href="{{ url_for('static', filename='icons/icon-512x512.png') }}?v=1.3" sizes="512x512" type="image/png">
+    <!-- FAVICONS WITH VERSIONING -->
+    <link rel="icon" href="{{ url_for('static', filename='icons/icon-32x32.png') }}?v=3.0" sizes="32x32" type="image/png">
+    <link rel="icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}?v=3.0" sizes="192x192" type="image/png">
+    <link rel="icon" href="{{ url_for('static', filename='icons/icon-512x512.png') }}?v=3.0" sizes="512x512" type="image/png">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}?v=3.0">
 
-    <!-- Apple Touch Icon -->
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}?v=1.3">
-    
-    <!-- Bootstrap CSS -->
+    <!-- STYLES -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=3.0">
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('dashboard') }}">
-                <img src="{{ url_for('static', filename='icons/icon-32x32.png') }}?v=1.3" alt="Logo" width="32" height="32" class="d-inline-block align-text-top me-2">
+                <img src="{{ url_for('static', filename='icons/icon-32x32.png') }}?v=3.0" alt="Logo" width="32" height="32" class="d-inline-block align-text-top me-2">
                 Crescent Hotel
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -102,47 +98,34 @@
         {% block content %}{% endblock %}
     </div>
 
-    <!-- Install App Button (will be shown/hidden by script.js) -->
-    <button id="installBtn" class="btn btn-success install-btn" style="display: none; position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
-        📱 Install App
-    </button>
-
-    <!-- Clear Cache Button (for debugging) -->
-    {% if session.get('role') == 'admin' %}
-    <button id="clearCacheBtn" class="btn btn-warning clear-cache-btn" style="position: fixed; bottom: 20px; left: 20px; z-index: 1000; display: none;">
-        🔄 Clear Cache
-    </button>
-    {% endif %}
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/script.js') }}?v=1.3"></script>
+    <!-- Buttons will be added by script.js -->
     
-    <!-- Inline script for immediate cache control -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}?v=3.0"></script>
+    
+    <!-- SAFETY SCRIPT -->
     <script>
-        // Immediate cache control on page load
-        if ('serviceWorker' in navigator) {
-            // Check if we need to update the service worker
-            navigator.serviceWorker.ready.then(registration => {
-                registration.update();
-            });
-            
-            // Add clear cache functionality for admin users
-            {% if session.get('role') == 'admin' %}
-            document.getElementById('clearCacheBtn').style.display = 'block';
-            document.getElementById('clearCacheBtn').addEventListener('click', function() {
-                if (confirm('Clear all app cache? This will reload the page.')) {
-                    navigator.serviceWorker.getRegistrations().then(registrations => {
-                        registrations.forEach(registration => registration.unregister());
-                    });
+        // Emergency cache clear if page fails to load
+        if (window.performance && performance.navigation.type === 1) {
+            // Page was reloaded - check if we need to clear cache
+            if (sessionStorage.getItem('clearCacheNeeded')) {
+                if ('caches' in window) {
                     caches.keys().then(cacheNames => {
                         cacheNames.forEach(cacheName => caches.delete(cacheName));
-                    }).then(() => {
-                        window.location.reload(true);
                     });
                 }
-            });
-            {% endif %}
+                sessionStorage.removeItem('clearCacheNeeded');
+            }
         }
+        
+        // If page takes too long to load, offer cache clear
+        setTimeout(() => {
+            if (document.querySelectorAll('.alert').length === 0 && 
+                document.body.innerHTML.includes('Crescent Hotel')) {
+                // Page loaded successfully
+                sessionStorage.setItem('lastLoadSuccess', Date.now());
+            }
+        }, 5000);
     </script>
 </body>
 </html>
