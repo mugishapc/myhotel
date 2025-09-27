@@ -65,7 +65,7 @@ def login():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT * FROM users WHERE name=%s AND password=%s",
+            "SELECT * FROM users WHERE name=? AND password=?",
             (username, password)
         )
         user = cursor.fetchone()
@@ -94,24 +94,24 @@ def dashboard():
     
     try:
         # Get total rooms
-        cursor.execute('SELECT COUNT(*) FROM rooms')
+        cursor.execute('SELECT COUNT(*) as count FROM rooms')
         total_rooms = cursor.fetchone()['count']
         
         # Get available rooms
-        cursor.execute("SELECT COUNT(*) FROM rooms WHERE status = 'available'")
+        cursor.execute("SELECT COUNT(*) as count FROM rooms WHERE status = 'available'")
         available_rooms = cursor.fetchone()['count']
         
         # Get sold rooms
-        cursor.execute("SELECT COUNT(*) FROM rooms WHERE status = 'sold'")
+        cursor.execute("SELECT COUNT(*) as count FROM rooms WHERE status = 'sold'")
         sold_rooms = cursor.fetchone()['count']
         
         # Get today's income
-        cursor.execute('SELECT SUM(price) FROM sales WHERE date = %s', (today,))
+        cursor.execute('SELECT SUM(price) as sum FROM sales WHERE date = ?', (today,))
         today_income_result = cursor.fetchone()['sum']
         today_income = today_income_result if today_income_result else 0
         
         # Get today's expenses
-        cursor.execute('SELECT SUM(amount) FROM expenses WHERE date = %s', (today,))
+        cursor.execute('SELECT SUM(amount) as sum FROM expenses WHERE date = ?', (today,))
         today_expenses_result = cursor.fetchone()['sum']
         today_expenses = today_expenses_result if today_expenses_result else 0
         
@@ -151,7 +151,7 @@ def sell_room():
     try:
         # Check if room exists and is available
         cursor.execute(
-            'SELECT * FROM rooms WHERE room_number = %s AND status = %s',
+            'SELECT * FROM rooms WHERE room_number = ? AND status = ?',
             (room_number, 'available')
         )
         room = cursor.fetchone()
@@ -165,14 +165,14 @@ def sell_room():
             
             # Mark room as sold
             cursor.execute(
-                'UPDATE rooms SET status = %s WHERE room_number = %s',
+                'UPDATE rooms SET status = ? WHERE room_number = ?',
                 ('sold', room_number)
             )
             
             # Record the sale with type information
             today = date.today().isoformat()
             cursor.execute(
-                'INSERT INTO sales (room_id, gestionnaire_id, date, price, status, sale_type) VALUES (%s, %s, %s, %s, %s, %s)',
+                'INSERT INTO sales (room_id, gestionnaire_id, date, price, status, sale_type) VALUES (?, ?, ?, ?, ?, ?)',
                 (room['room_id'], session['user_id'], today, price, 'active', sale_type)
             )
             
@@ -204,7 +204,7 @@ def restore_room():
     try:
         # Check if room exists and is sold
         cursor.execute(
-            'SELECT * FROM rooms WHERE room_number = %s AND status = %s',
+            'SELECT * FROM rooms WHERE room_number = ? AND status = ?',
             (room_number, 'sold')
         )
         room = cursor.fetchone()
@@ -212,7 +212,7 @@ def restore_room():
         if room:
             # Check if there's an active sale for this room by the current gestionnaire
             cursor.execute(
-                'SELECT * FROM sales WHERE room_id = %s AND gestionnaire_id = %s AND status = %s',
+                'SELECT * FROM sales WHERE room_id = ? AND gestionnaire_id = ? AND status = ?',
                 (room['room_id'], session['user_id'], 'active')
             )
             active_sale = cursor.fetchone()
@@ -220,13 +220,13 @@ def restore_room():
             if active_sale:
                 # Mark room as available
                 cursor.execute(
-                    'UPDATE rooms SET status = %s WHERE room_number = %s',
+                    'UPDATE rooms SET status = ? WHERE room_number = ?',
                     ('available', room_number)
                 )
                 
                 # Update the sale status to 'restored'
                 cursor.execute(
-                    'UPDATE sales SET status = %s, restore_date = %s WHERE id = %s',
+                    'UPDATE sales SET status = ?, restore_date = ? WHERE id = ?',
                     ('restored', date.today().isoformat(), active_sale['id'])
                 )
                 
@@ -259,7 +259,7 @@ def add_expense():
         today = date.today().isoformat()
         
         cursor.execute(
-            'INSERT INTO expenses (gestionnaire_id, reason, amount, date) VALUES (%s, %s, %s, %s)',
+            'INSERT INTO expenses (gestionnaire_id, reason, amount, date) VALUES (?, ?, ?, ?)',
             (session['user_id'], reason, amount, today)
         )
         
@@ -304,7 +304,7 @@ def add_room():
     
     try:
         cursor.execute(
-            'INSERT INTO rooms (room_number, price_full, price_passage) VALUES (%s, %s, %s)',
+            'INSERT INTO rooms (room_number, price_full, price_passage) VALUES (?, ?, ?)',
             (room_number, price_full, price_passage)
         )
         conn.commit()
@@ -335,13 +335,13 @@ def delete_room(room_id):
     
     try:
         # Check if room is sold
-        cursor.execute('SELECT * FROM rooms WHERE room_id = %s', (room_id,))
+        cursor.execute('SELECT * FROM rooms WHERE room_id = ?', (room_id,))
         room = cursor.fetchone()
         
         if room and room['status'] == 'sold':
             flash('Cannot delete a sold room.', 'danger')
         else:
-            cursor.execute('DELETE FROM rooms WHERE room_id = %s', (room_id,))
+            cursor.execute('DELETE FROM rooms WHERE room_id = ?', (room_id,))
             conn.commit()
             flash('Room deleted successfully!', 'success')
     
@@ -373,7 +373,7 @@ def expenses():
                 SELECT e.*, u.name as gestionnaire_name 
                 FROM expenses e 
                 JOIN users u ON e.gestionnaire_id = u.id 
-                WHERE e.gestionnaire_id = %s
+                WHERE e.gestionnaire_id = ?
                 ORDER BY e.date DESC
             ''', (session['user_id'],))
         
@@ -417,7 +417,7 @@ def reports():
                 FROM sales s 
                 JOIN rooms r ON s.room_id = r.room_id 
                 JOIN users u ON s.gestionnaire_id = u.id 
-                WHERE s.date BETWEEN %s AND %s
+                WHERE s.date BETWEEN ? AND ?
                 ORDER BY s.date DESC
             ''', (start_date, end_date))
         else:
@@ -426,7 +426,7 @@ def reports():
                 FROM sales s 
                 JOIN rooms r ON s.room_id = r.room_id 
                 JOIN users u ON s.gestionnaire_id = u.id 
-                WHERE s.gestionnaire_id = %s AND s.date BETWEEN %s AND %s
+                WHERE s.gestionnaire_id = ? AND s.date BETWEEN ? AND ?
                 ORDER BY s.date DESC
             ''', (session['user_id'], start_date, end_date))
         
@@ -438,7 +438,7 @@ def reports():
                 SELECT e.*, u.name as gestionnaire_name 
                 FROM expenses e 
                 JOIN users u ON e.gestionnaire_id = u.id 
-                WHERE e.date BETWEEN %s AND %s
+                WHERE e.date BETWEEN ? AND ?
                 ORDER BY e.date DESC
             ''', (start_date, end_date))
         else:
@@ -446,7 +446,7 @@ def reports():
                 SELECT e.*, u.name as gestionnaire_name 
                 FROM expenses e 
                 JOIN users u ON e.gestionnaire_id = u.id 
-                WHERE e.gestionnaire_id = %s AND e.date BETWEEN %s AND %s
+                WHERE e.gestionnaire_id = ? AND e.date BETWEEN ? AND ?
                 ORDER BY e.date DESC
             ''', (session['user_id'], start_date, end_date))
         
@@ -455,28 +455,28 @@ def reports():
         # Calculate totals
         if session['role'] == 'admin':
             cursor.execute(
-                'SELECT SUM(price) FROM sales WHERE date BETWEEN %s AND %s',
+                'SELECT SUM(price) as sum FROM sales WHERE date BETWEEN ? AND ?',
                 (start_date, end_date)
             )
             total_income_result = cursor.fetchone()['sum']
             total_income = total_income_result if total_income_result else 0
             
             cursor.execute(
-                'SELECT SUM(amount) FROM expenses WHERE date BETWEEN %s AND %s',
+                'SELECT SUM(amount) as sum FROM expenses WHERE date BETWEEN ? AND ?',
                 (start_date, end_date)
             )
             total_expenses_result = cursor.fetchone()['sum']
             total_expenses = total_expenses_result if total_expenses_result else 0
         else:
             cursor.execute(
-                'SELECT SUM(price) FROM sales WHERE gestionnaire_id = %s AND date BETWEEN %s AND %s',
+                'SELECT SUM(price) as sum FROM sales WHERE gestionnaire_id = ? AND date BETWEEN ? AND ?',
                 (session['user_id'], start_date, end_date)
             )
             total_income_result = cursor.fetchone()['sum']
             total_income = total_income_result if total_income_result else 0
             
             cursor.execute(
-                'SELECT SUM(amount) FROM expenses WHERE gestionnaire_id = %s AND date BETWEEN %s AND %s',
+                'SELECT SUM(amount) as sum FROM expenses WHERE gestionnaire_id = ? AND date BETWEEN ? AND ?',
                 (session['user_id'], start_date, end_date)
             )
             total_expenses_result = cursor.fetchone()['sum']
@@ -658,7 +658,7 @@ def download_pdf_report():
             FROM sales s 
             JOIN rooms r ON s.room_id = r.room_id 
             JOIN users u ON s.gestionnaire_id = u.id 
-            WHERE s.date BETWEEN %s AND %s
+            WHERE s.date BETWEEN ? AND ?
             ORDER BY s.date DESC
         ''', (start_date, end_date))
         sales = cursor.fetchall()
@@ -668,21 +668,21 @@ def download_pdf_report():
             SELECT e.*, u.name as gestionnaire_name 
             FROM expenses e 
             JOIN users u ON e.gestionnaire_id = u.id 
-            WHERE e.date BETWEEN %s AND %s
+            WHERE e.date BETWEEN ? AND ?
             ORDER BY e.date DESC
         ''', (start_date, end_date))
         expenses = cursor.fetchall()
         
         # Calculate totals
         cursor.execute(
-            'SELECT SUM(price) FROM sales WHERE date BETWEEN %s AND %s',
+            'SELECT SUM(price) as sum FROM sales WHERE date BETWEEN ? AND ?',
             (start_date, end_date)
         )
         total_income_result = cursor.fetchone()['sum']
         total_income = total_income_result if total_income_result else 0
         
         cursor.execute(
-            'SELECT SUM(amount) FROM expenses WHERE date BETWEEN %s AND %s',
+            'SELECT SUM(amount) as sum FROM expenses WHERE date BETWEEN ? AND ?',
             (start_date, end_date)
         )
         total_expenses_result = cursor.fetchone()['sum']
@@ -729,7 +729,7 @@ def download_weekly_report():
             FROM sales s 
             JOIN rooms r ON s.room_id = r.room_id 
             JOIN users u ON s.gestionnaire_id = u.id 
-            WHERE s.date BETWEEN %s AND %s
+            WHERE s.date BETWEEN ? AND ?
             ORDER BY s.date DESC
         ''', (start_date, end_date))
         sales = cursor.fetchall()
@@ -739,21 +739,21 @@ def download_weekly_report():
             SELECT e.*, u.name as gestionnaire_name 
             FROM expenses e 
             JOIN users u ON e.gestionnaire_id = u.id 
-            WHERE e.date BETWEEN %s AND %s
+            WHERE e.date BETWEEN ? AND ?
             ORDER BY e.date DESC
         ''', (start_date, end_date))
         expenses = cursor.fetchall()
         
         # Calculate totals
         cursor.execute(
-            'SELECT SUM(price) FROM sales WHERE date BETWEEN %s AND %s',
+            'SELECT SUM(price) as sum FROM sales WHERE date BETWEEN ? AND ?',
             (start_date, end_date)
         )
         total_income_result = cursor.fetchone()['sum']
         total_income = total_income_result if total_income_result else 0
         
         cursor.execute(
-            'SELECT SUM(amount) FROM expenses WHERE date BETWEEN %s AND %s',
+            'SELECT SUM(amount) as sum FROM expenses WHERE date BETWEEN ? AND ?',
             (start_date, end_date)
         )
         total_expenses_result = cursor.fetchone()['sum']
@@ -836,19 +836,19 @@ def delete_report(report_type, report_id):
     try:
         if report_type == 'sale':
             # Get the sale record to find the room_id
-            cursor.execute('SELECT * FROM sales WHERE id = %s', (report_id,))
+            cursor.execute('SELECT * FROM sales WHERE id = ?', (report_id,))
             sale = cursor.fetchone()
             if sale:
                 # Update room status back to available
-                cursor.execute('UPDATE rooms SET status = %s WHERE room_id = %s', ('available', sale['room_id']))
+                cursor.execute('UPDATE rooms SET status = ? WHERE room_id = ?', ('available', sale['room_id']))
                 # Delete the sale record
-                cursor.execute('DELETE FROM sales WHERE id = %s', (report_id,))
+                cursor.execute('DELETE FROM sales WHERE id = ?', (report_id,))
                 conn.commit()
                 flash('Sale report deleted successfully! Room status updated to available.', 'success')
             else:
                 flash('Sale report not found!', 'danger')
         elif report_type == 'expense':
-            cursor.execute('DELETE FROM expenses WHERE id = %s', (report_id,))
+            cursor.execute('DELETE FROM expenses WHERE id = ?', (report_id,))
             conn.commit()
             flash('Expense report deleted successfully!', 'success')
         else:
@@ -871,7 +871,7 @@ def users():
     cursor = conn.cursor()
     
     try:
-        cursor.execute('SELECT * FROM users WHERE id != %s ORDER BY name', (session['user_id'],))
+        cursor.execute('SELECT * FROM users WHERE id != ? ORDER BY name', (session['user_id'],))
         users_list = cursor.fetchall()
         return render_template('users.html', users=users_list)
     except Exception as e:
@@ -895,12 +895,12 @@ def edit_user(user_id):
         try:
             if password:
                 cursor.execute(
-                    'UPDATE users SET name = %s, role = %s, password = %s WHERE id = %s',
+                    'UPDATE users SET name = ?, role = ?, password = ? WHERE id = ?',
                     (name, role, password, user_id)
                 )
             else:
                 cursor.execute(
-                    'UPDATE users SET name = %s, role = %s WHERE id = %s',
+                    'UPDATE users SET name = ?, role = ? WHERE id = ?',
                     (name, role, user_id)
                 )
             conn.commit()
@@ -918,7 +918,7 @@ def edit_user(user_id):
         return redirect(url_for('users'))
     
     try:
-        cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))
+        cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
         user = cursor.fetchone()
         
         if not user:
@@ -946,15 +946,15 @@ def delete_user(user_id):
     
     try:
         # Check if user has any sales or expenses
-        cursor.execute('SELECT COUNT(*) FROM sales WHERE gestionnaire_id = %s', (user_id,))
+        cursor.execute('SELECT COUNT(*) as count FROM sales WHERE gestionnaire_id = ?', (user_id,))
         sales_count = cursor.fetchone()['count']
-        cursor.execute('SELECT COUNT(*) FROM expenses WHERE gestionnaire_id = %s', (user_id,))
+        cursor.execute('SELECT COUNT(*) as count FROM expenses WHERE gestionnaire_id = ?', (user_id,))
         expenses_count = cursor.fetchone()['count']
         
         if sales_count > 0 or expenses_count > 0:
             flash('Cannot delete user with existing sales or expenses records!', 'danger')
         else:
-            cursor.execute('DELETE FROM users WHERE id = %s', (user_id,))
+            cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
             conn.commit()
             flash('User deleted successfully!', 'success')
     
@@ -980,7 +980,7 @@ def add_user():
         
         try:
             cursor.execute(
-                'INSERT INTO users (name, role, password) VALUES (%s, %s, %s)',
+                'INSERT INTO users (name, role, password) VALUES (?, ?, ?)',
                 (name, role, password)
             )
             conn.commit()
