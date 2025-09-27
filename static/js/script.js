@@ -1,7 +1,15 @@
-// Crescent Hotel App - SAFE PWA IMPLEMENTATION
+// Crescent Hotel App - COMPLETE RESET VERSION
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Crescent Hotel App loaded - Safe PWA enabled');
+    console.log('Crescent Hotel App - Reset version loaded');
     
+    // FIRST: Clear any problematic service workers immediately
+    clearAllServiceWorkers();
+    
+    // Then load the rest of the app
+    initializeApp();
+});
+
+function initializeApp() {
     // Add the CSS for 3 dots animation
     const style = document.createElement('style');
     style.textContent = `
@@ -26,23 +34,6 @@ document.addEventListener('DOMContentLoaded', function() {
         .btn-loading {
             background-color: #6c757d !important;
             opacity: 0.8;
-        }
-        
-        /* Install button styles */
-        .install-btn {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 1000;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-        }
-        
-        .cache-clear-btn {
-            position: fixed;
-            bottom: 70px;
-            right: 20px;
-            z-index: 1000;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
         }
     `;
     document.head.appendChild(style);
@@ -91,14 +82,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Initialize Safe PWA
-    initializeSafePWA();
-});
+    // Register a SAFE service worker after 3 seconds
+    setTimeout(registerSafeServiceWorker, 3000);
+}
 
 function showThreeDots(button) {
     const originalHTML = button.innerHTML;
     
-    // Show 3 dots animation
     button.innerHTML = `
         <span class="loading-dots">
             <span class="dot dot1">.</span>
@@ -109,7 +99,6 @@ function showThreeDots(button) {
     button.disabled = true;
     button.classList.add('btn-loading');
     
-    // Auto-restore after 3 seconds (safety measure)
     setTimeout(() => {
         if (button.classList.contains('btn-loading')) {
             button.innerHTML = originalHTML;
@@ -119,139 +108,80 @@ function showThreeDots(button) {
     }, 3000);
 }
 
-// SAFE PWA INITIALIZATION
-function initializeSafePWA() {
+// NUCLEAR OPTION: Clear ALL service workers
+function clearAllServiceWorkers() {
     if ('serviceWorker' in navigator) {
-        // Register service worker with error handling
-        navigator.serviceWorker.register('/sw.js?v=3.0', { scope: '/' })
-            .then(function(registration) {
-                console.log('ServiceWorker registered successfully:', registration);
-                
-                // Check for updates every hour
-                setInterval(() => {
-                    registration.update();
-                }, 60 * 60 * 1000);
-                
-                // Handle updates
-                registration.addEventListener('updatefound', () => {
-                    const newWorker = registration.installing;
-                    newWorker.addEventListener('statechange', () => {
-                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            showUpdateNotification();
-                        }
-                    });
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            console.log('Found', registrations.length, 'service workers to unregister');
+            registrations.forEach(function(registration) {
+                registration.unregister().then(function(success) {
+                    console.log('ServiceWorker unregistered:', success);
                 });
-            })
-            .catch(function(error) {
-                console.log('ServiceWorker registration failed:', error);
-                // If registration fails, clear any existing workers
-                clearProblematicServiceWorkers();
             });
+        });
         
-        // Handle controller changes (app updates)
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-            console.log('Controller changed, reloading page...');
-            window.location.reload();
+        // Clear all caches
+        if ('caches' in window) {
+            caches.keys().then(function(cacheNames) {
+                console.log('Clearing', cacheNames.length, 'caches');
+                cacheNames.forEach(function(cacheName) {
+                    caches.delete(cacheName);
+                });
+            });
+        }
+        
+        // Clear storage
+        localStorage.removeItem('service-worker-registered');
+        sessionStorage.clear();
+    }
+}
+
+// Register a VERY SAFE service worker
+function registerSafeServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        // Only register if not already registered
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+            if (registrations.length === 0) {
+                navigator.serviceWorker.register('/sw.js?version=' + Date.now(), { scope: './' })
+                    .then(function(registration) {
+                        console.log('Safe ServiceWorker registered');
+                        localStorage.setItem('service-worker-registered', 'true');
+                    })
+                    .catch(function(error) {
+                        console.log('ServiceWorker registration failed (safe mode):', error);
+                    });
+            }
         });
     }
-    
-    // Add install prompt
-    setupInstallPrompt();
-    
-    // Add cache clear button for safety
-    addCacheClearButton();
 }
 
-// INSTALL PROMPT SETUP
-function setupInstallPrompt() {
-    let deferredPrompt;
+// Add install prompt (simple version)
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    
+    // Show install button after 5 seconds
+    setTimeout(() => {
+        showInstallButton();
+    }, 5000);
+});
+
+function showInstallButton() {
+    if (!deferredPrompt) return;
+    
     const installBtn = document.createElement('button');
-    installBtn.id = 'installPWA';
     installBtn.innerHTML = '📱 Install App';
-    installBtn.className = 'btn btn-success install-btn';
-    installBtn.style.display = 'none';
+    installBtn.className = 'btn btn-success';
+    installBtn.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 1000;';
     
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        installBtn.style.display = 'block';
-        
-        installBtn.onclick = () => {
-            installBtn.style.display = 'none';
-            deferredPrompt.prompt();
-            deferredPrompt.userChoice.then((choiceResult) => {
-                if (choiceResult.outcome === 'accepted') {
-                    console.log('User accepted PWA installation');
-                }
-                deferredPrompt = null;
-            });
-        };
-    });
-    
-    window.addEventListener('appinstalled', () => {
-        console.log('PWA was installed');
+    installBtn.onclick = () => {
         installBtn.style.display = 'none';
-        deferredPrompt = null;
-    });
-    
-    document.body.appendChild(installBtn);
-}
-
-// CACHE CLEAR BUTTON FOR SAFETY
-function addCacheClearButton() {
-    const clearBtn = document.createElement('button');
-    clearBtn.id = 'clearCache';
-    clearBtn.innerHTML = '🔄 Clear Cache';
-    clearBtn.className = 'btn btn-warning cache-clear-btn';
-    clearBtn.style.display = 'block';
-    
-    clearBtn.onclick = () => {
-        if (confirm('Clear app cache? This will reload the page.')) {
-            clearAppCache();
-        }
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+            deferredPrompt = null;
+        });
     };
     
-    document.body.appendChild(clearBtn);
-}
-
-// SAFE CACHE CLEARING
-function clearAppCache() {
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(registrations => {
-            registrations.forEach(registration => {
-                registration.unregister();
-            });
-        });
-    }
-    
-    if ('caches' in window) {
-        caches.keys().then(cacheNames => {
-            cacheNames.forEach(cacheName => {
-                caches.delete(cacheName);
-            });
-        });
-    }
-    
-    // Reload after a short delay
-    setTimeout(() => {
-        window.location.reload(true);
-    }, 1000);
-}
-
-// CLEAR PROBLEMATIC SERVICE WORKERS
-function clearProblematicServiceWorkers() {
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(registrations => {
-            registrations.forEach(registration => {
-                registration.unregister();
-            });
-        });
-    }
-}
-
-// UPDATE NOTIFICATION
-function showUpdateNotification() {
-    if (confirm('A new version is available. Reload to update?')) {
-        window.location.reload();
-    }
+    document.body.appendChild(installBtn);
 }

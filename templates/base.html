@@ -4,35 +4,119 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <!-- SAFE CACHE CONTROL -->
+    <!-- AGGRESSIVE CACHE CONTROL -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <!-- PWA CONFIGURATION -->
+    <!-- BASIC PWA -->
     <meta name="theme-color" content="#007bff">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Crescent Hotel">
-    <link rel="manifest" href="{{ url_for('manifest') }}?v=3.0">
+    <link rel="manifest" href="{{ url_for('manifest') }}?v=4.0">
     
     <title>Crescent Hotel - {% block title %}{% endblock %}</title>
     
-    <!-- FAVICONS WITH VERSIONING -->
-    <link rel="icon" href="{{ url_for('static', filename='icons/icon-32x32.png') }}?v=3.0" sizes="32x32" type="image/png">
-    <link rel="icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}?v=3.0" sizes="192x192" type="image/png">
-    <link rel="icon" href="{{ url_for('static', filename='icons/icon-512x512.png') }}?v=3.0" sizes="512x512" type="image/png">
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}?v=3.0">
-
-    <!-- STYLES -->
+    <!-- FAVICON -->
+    <link rel="icon" href="{{ url_for('static', filename='icons/icon-32x32.png') }}?v=4.0">
+    
+    <!-- BOOTSTRAP CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=3.0">
+    
+    <!-- CUSTOM CSS WITH FALLBACK -->
+    <style>
+        /* Basic styling as fallback if CSS file fails to load */
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .navbar-brand {
+            font-weight: 600;
+            font-size: 1.5rem;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-top: 20px;
+            margin-bottom: 20px;
+            padding: 30px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            border: none;
+            border-radius: 8px;
+            padding: 10px 25px;
+            font-weight: 500;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(45deg, #0056b3, #004494);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,123,255,0.3);
+        }
+        
+        .form-control {
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+            padding: 12px 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .form-control:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+        }
+        
+        .alert {
+            border-radius: 10px;
+            border: none;
+            padding: 15px 20px;
+        }
+        
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            padding: 40px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .hotel-logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .hotel-logo img {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 15px;
+        }
+        
+        .hotel-logo h1 {
+            color: #2c3e50;
+            font-weight: 700;
+            margin: 0;
+        }
+        
+        .hotel-logo p {
+            color: #7f8c8d;
+            margin: 5px 0 0 0;
+        }
+    </style>
+    
+    <!-- EXTERNAL CSS FILE -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=4.0" onerror="console.log('CSS failed to load, using inline styles')">
 </head>
 <body>
+    <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
+        <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('dashboard') }}">
-                <img src="{{ url_for('static', filename='icons/icon-32x32.png') }}?v=3.0" alt="Logo" width="32" height="32" class="d-inline-block align-text-top me-2">
+                <img src="{{ url_for('static', filename='icons/icon-32x32.png') }}?v=4.0" alt="Logo" width="32" height="32" class="d-inline-block align-text-top me-2">
                 Crescent Hotel
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -83,49 +167,66 @@
         </div>
     </nav>
 
-    <div class="container mt-4">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+    <!-- Main Content -->
+    <div class="container-fluid">
+        <div class="row justify-content-center">
+            <div class="col-12 col-md-10 col-lg-8">
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show mt-3" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
 
-        {% block content %}{% endblock %}
+                <!-- Page Content -->
+                {% block content %}{% endblock %}
+            </div>
+        </div>
     </div>
 
-    <!-- Buttons will be added by script.js -->
-    
+    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/script.js') }}?v=3.0"></script>
     
-    <!-- SAFETY SCRIPT -->
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/script.js') }}?v=4.0"></script>
+    
+    <!-- Emergency CSS Loader -->
     <script>
-        // Emergency cache clear if page fails to load
-        if (window.performance && performance.navigation.type === 1) {
-            // Page was reloaded - check if we need to clear cache
-            if (sessionStorage.getItem('clearCacheNeeded')) {
-                if ('caches' in window) {
-                    caches.keys().then(cacheNames => {
-                        cacheNames.forEach(cacheName => caches.delete(cacheName));
-                    });
+        // Check if CSS loaded properly
+        setTimeout(function() {
+            const stylesheets = document.styleSheets;
+            let cssLoaded = false;
+            
+            for (let i = 0; i < stylesheets.length; i++) {
+                if (stylesheets[i].href && stylesheets[i].href.includes('style.css')) {
+                    cssLoaded = true;
+                    break;
                 }
-                sessionStorage.removeItem('clearCacheNeeded');
             }
-        }
-        
-        // If page takes too long to load, offer cache clear
-        setTimeout(() => {
-            if (document.querySelectorAll('.alert').length === 0 && 
-                document.body.innerHTML.includes('Crescent Hotel')) {
-                // Page loaded successfully
-                sessionStorage.setItem('lastLoadSuccess', Date.now());
+            
+            // If CSS didn't load, enhance inline styles
+            if (!cssLoaded) {
+                console.log('External CSS failed, enhancing inline styles');
+                document.body.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                document.body.style.minHeight = '100vh';
+                document.body.style.padding = '20px';
+                
+                const containers = document.querySelectorAll('.container, .container-fluid');
+                containers.forEach(container => {
+                    container.style.background = 'white';
+                    container.style.borderRadius = '15px';
+                    container.style.boxShadow = '0 10px 30px rgba(0,0,0,0.1)';
+                    container.style.padding = '30px';
+                    container.style.marginTop = '20px';
+                    container.style.marginBottom = '20px';
+                });
             }
-        }, 5000);
+        }, 1000);
     </script>
 </body>
 </html>
