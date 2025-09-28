@@ -1,15 +1,7 @@
-// Crescent Hotel App - COMPLETE RESET VERSION
+// Crescent Hotel App - 3 Dots Loading Effect - FIXED VERSION
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Crescent Hotel App - Reset version loaded');
+    console.log('Crescent Hotel App loaded - Cache fix applied');
     
-    // FIRST: Clear any problematic service workers immediately
-    clearAllServiceWorkers();
-    
-    // Then load the rest of the app
-    initializeApp();
-});
-
-function initializeApp() {
     // Add the CSS for 3 dots animation
     const style = document.createElement('style');
     style.textContent = `
@@ -82,13 +74,14 @@ function initializeApp() {
         });
     });
     
-    // Register a SAFE service worker after 3 seconds
-    setTimeout(registerSafeServiceWorker, 3000);
-}
+    // CLEAR SERVICE WORKER ON EVERY LOAD (SAFETY MEASURE)
+    clearServiceWorker();
+});
 
 function showThreeDots(button) {
     const originalHTML = button.innerHTML;
     
+    // Show 3 dots animation
     button.innerHTML = `
         <span class="loading-dots">
             <span class="dot dot1">.</span>
@@ -99,6 +92,7 @@ function showThreeDots(button) {
     button.disabled = true;
     button.classList.add('btn-loading');
     
+    // Auto-restore after 3 seconds (safety measure)
     setTimeout(() => {
         if (button.classList.contains('btn-loading')) {
             button.innerHTML = originalHTML;
@@ -108,80 +102,38 @@ function showThreeDots(button) {
     }, 3000);
 }
 
-// NUCLEAR OPTION: Clear ALL service workers
-function clearAllServiceWorkers() {
+// CLEAR SERVICE WORKER FUNCTION
+function clearServiceWorker() {
     if ('serviceWorker' in navigator) {
+        // Unregister all service workers
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            console.log('Found', registrations.length, 'service workers to unregister');
-            registrations.forEach(function(registration) {
-                registration.unregister().then(function(success) {
-                    console.log('ServiceWorker unregistered:', success);
-                });
-            });
+            for (let registration of registrations) {
+                registration.unregister();
+                console.log('ServiceWorker unregistered');
+            }
         });
         
         // Clear all caches
-        if ('caches' in window) {
-            caches.keys().then(function(cacheNames) {
-                console.log('Clearing', cacheNames.length, 'caches');
-                cacheNames.forEach(function(cacheName) {
-                    caches.delete(cacheName);
-                });
+        caches.keys().then(function(cacheNames) {
+            cacheNames.forEach(function(cacheName) {
+                caches.delete(cacheName);
+                console.log('Cache deleted:', cacheName);
             });
-        }
-        
-        // Clear storage
-        localStorage.removeItem('service-worker-registered');
-        sessionStorage.clear();
-    }
-}
-
-// Register a VERY SAFE service worker
-function registerSafeServiceWorker() {
-    if ('serviceWorker' in navigator) {
-        // Only register if not already registered
-        navigator.serviceWorker.getRegistrations().then(registrations => {
-            if (registrations.length === 0) {
-                navigator.serviceWorker.register('/sw.js?version=' + Date.now(), { scope: './' })
-                    .then(function(registration) {
-                        console.log('Safe ServiceWorker registered');
-                        localStorage.setItem('service-worker-registered', 'true');
-                    })
-                    .catch(function(error) {
-                        console.log('ServiceWorker registration failed (safe mode):', error);
-                    });
-            }
         });
     }
 }
 
-// Add install prompt (simple version)
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    
-    // Show install button after 5 seconds
-    setTimeout(() => {
-        showInstallButton();
-    }, 5000);
-});
-
-function showInstallButton() {
-    if (!deferredPrompt) return;
-    
-    const installBtn = document.createElement('button');
-    installBtn.innerHTML = '📱 Install App';
-    installBtn.className = 'btn btn-success';
-    installBtn.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 1000;';
-    
-    installBtn.onclick = () => {
-        installBtn.style.display = 'none';
-        deferredPrompt.prompt();
-        deferredPrompt.userChoice.then((choiceResult) => {
-            deferredPrompt = null;
-        });
-    };
-    
-    document.body.appendChild(installBtn);
+// PWA functionality - ONLY REGISTER IF NEEDED (commented out for safety)
+/*
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js')
+            .then(function(registration) {
+                console.log('ServiceWorker registered successfully');
+            })
+            .catch(function(error) {
+                console.log('ServiceWorker registration failed');
+            });
+    });
 }
+*/

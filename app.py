@@ -1043,7 +1043,5 @@ def logout():
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    # Use 0.0.0.0 to accept connections from all IPs (required for Render)
-    app.run(host='0.0.0.0', port=port, debug=False)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
