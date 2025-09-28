@@ -75,11 +75,11 @@ def service_worker():
 def offline():
     return render_template('offline.html')
 
-# FIXED: Root route with proper error handling
+# FIXED: Root route that actually works
 @app.route('/')
 def index():
     try:
-        return redirect(url_for('login'))
+        return render_template('index.html')
     except Exception as e:
         return f"Error: {e}", 500
 
@@ -93,6 +93,68 @@ def health_check():
     except Exception as e:
         return jsonify({"status": "unhealthy", "error": str(e)}), 500
 
+# EMERGENCY CACHE CLEARING ROUTE
+@app.route('/clear-cache')
+def clear_cache():
+    """Emergency cache clearing route"""
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Clear Cache - Crescent Hotel</title>
+        <style>
+            body { font-family: Arial, sans-serif; padding: 20px; text-align: center; }
+            .success { color: green; }
+            .error { color: red; }
+        </style>
+    </head>
+    <body>
+        <h2>Clearing Cache...</h2>
+        <div id="status">Please wait...</div>
+        <script>
+            async function clearCache() {
+                const status = document.getElementById('status');
+                try {
+                    // Clear service workers
+                    if ('serviceWorker' in navigator) {
+                        const registrations = await navigator.serviceWorker.getRegistrations();
+                        for(let registration of registrations) {
+                            await registration.unregister();
+                            console.log('ServiceWorker unregistered');
+                        }
+                    }
+                    
+                    // Clear caches
+                    if ('caches' in window) {
+                        const cacheNames = await caches.keys();
+                        for(let cacheName of cacheNames) {
+                            await caches.delete(cacheName);
+                            console.log('Cache deleted:', cacheName);
+                        }
+                    }
+                    
+                    // Clear storage
+                    localStorage.removeItem('service-worker-registered');
+                    sessionStorage.clear();
+                    
+                    status.innerHTML = '<p class="success">✅ Cache cleared successfully!</p><p>Redirecting to main page...</p>';
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 2000);
+                    
+                } catch (error) {
+                    status.innerHTML = '<p class="error">❌ Error clearing cache: ' + error.message + '</p><p>Still redirecting...</p>';
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 3000);
+                }
+            }
+            
+            clearCache();
+        </script>
+    </body>
+    </html>
+    """
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():

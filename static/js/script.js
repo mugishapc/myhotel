@@ -1,6 +1,16 @@
-// Crescent Hotel App - 3 Dots Loading Effect - FIXED VERSION
+// Crescent Hotel App - FIXED VERSION
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Crescent Hotel App loaded - Cache fix applied');
+    console.log('Crescent Hotel App - Fixed version loaded');
+    
+    // IMMEDIATELY clear service workers and caches
+    clearAllServiceWorkers();
+    
+    // Initialize app after a short delay
+    setTimeout(initializeApp, 1000);
+});
+
+function initializeApp() {
+    console.log('Initializing app...');
     
     // Add the CSS for 3 dots animation
     const style = document.createElement('style');
@@ -74,14 +84,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // CLEAR SERVICE WORKER ON EVERY LOAD (SAFETY MEASURE)
-    clearServiceWorker();
-});
+    // Register service worker only after everything is stable
+    setTimeout(registerSafeServiceWorker, 5000);
+}
 
 function showThreeDots(button) {
     const originalHTML = button.innerHTML;
     
-    // Show 3 dots animation
     button.innerHTML = `
         <span class="loading-dots">
             <span class="dot dot1">.</span>
@@ -92,7 +101,6 @@ function showThreeDots(button) {
     button.disabled = true;
     button.classList.add('btn-loading');
     
-    // Auto-restore after 3 seconds (safety measure)
     setTimeout(() => {
         if (button.classList.contains('btn-loading')) {
             button.innerHTML = originalHTML;
@@ -102,38 +110,105 @@ function showThreeDots(button) {
     }, 3000);
 }
 
-// CLEAR SERVICE WORKER FUNCTION
-function clearServiceWorker() {
+// COMPLETE Service Worker Cleanup
+function clearAllServiceWorkers() {
     if ('serviceWorker' in navigator) {
+        console.log('Clearing all service workers...');
+        
         // Unregister all service workers
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            for (let registration of registrations) {
-                registration.unregister();
-                console.log('ServiceWorker unregistered');
+            console.log('Found', registrations.length, 'service workers to unregister');
+            for(let registration of registrations) {
+                registration.unregister().then(function(success) {
+                    console.log('ServiceWorker unregistered:', success);
+                }).catch(function(error) {
+                    console.log('Error unregistering service worker:', error);
+                });
             }
+        }).catch(function(error) {
+            console.log('Error getting service worker registrations:', error);
         });
         
         // Clear all caches
-        caches.keys().then(function(cacheNames) {
-            cacheNames.forEach(function(cacheName) {
-                caches.delete(cacheName);
-                console.log('Cache deleted:', cacheName);
+        if ('caches' in window) {
+            caches.keys().then(function(cacheNames) {
+                console.log('Clearing', cacheNames.length, 'caches');
+                cacheNames.forEach(function(cacheName) {
+                    caches.delete(cacheName).then(function(success) {
+                        console.log('Cache deleted:', cacheName, success);
+                    });
+                });
+            }).catch(function(error) {
+                console.log('Error clearing caches:', error);
             });
+        }
+        
+        // Clear storage
+        try {
+            localStorage.removeItem('service-worker-registered');
+            sessionStorage.clear();
+        } catch (e) {
+            console.log('Error clearing storage:', e);
+        }
+    }
+}
+
+// Safe Service Worker Registration
+function registerSafeServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        // Double check no existing registrations
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+            if (registrations.length === 0) {
+                // Register with very specific scope and version
+                navigator.serviceWorker.register('/sw.js?version=' + Date.now(), { 
+                    scope: '/',
+                    updateViaCache: 'none'
+                })
+                .then(function(registration) {
+                    console.log('Safe ServiceWorker registered successfully');
+                    localStorage.setItem('service-worker-registered', 'true');
+                })
+                .catch(function(error) {
+                    console.log('ServiceWorker registration failed:', error);
+                });
+            } else {
+                console.log('Service workers already registered, skipping');
+            }
         });
     }
 }
 
-// PWA functionality - ONLY REGISTER IF NEEDED (commented out for safety)
-/*
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/sw.js')
-            .then(function(registration) {
-                console.log('ServiceWorker registered successfully');
-            })
-            .catch(function(error) {
-                console.log('ServiceWorker registration failed');
-            });
-    });
+// Install prompt
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    
+    setTimeout(() => {
+        showInstallButton();
+    }, 5000);
+});
+
+function showInstallButton() {
+    if (!deferredPrompt) return;
+    
+    const installBtn = document.createElement('button');
+    installBtn.innerHTML = '📱 Install App';
+    installBtn.className = 'btn btn-success';
+    installBtn.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 1000;';
+    
+    installBtn.onclick = () => {
+        installBtn.style.display = 'none';
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+            deferredPrompt = null;
+        });
+    };
+    
+    document.body.appendChild(installBtn);
 }
-*/
+
+// Global error handler to catch any issues
+window.addEventListener('error', function(e) {
+    console.error('Global error:', e.error);
+});
