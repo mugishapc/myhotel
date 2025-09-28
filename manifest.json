@@ -1,53 +1,71 @@
 {
-    "name": "Crescent Hotel Management",
+    "name": "Crescent Hotel",
     "short_name": "CrescentHotel",
-    "description": "Hotel room management system for Crescent Hotel",
-    "start_url": "/?v=3.0",
+    "description": "Hotel Management System for Crescent Hotel",
+    "start_url": "/",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#007bff",
-    "orientation": "portrait",
+    "orientation": "portrait-primary",
     "scope": "/",
+    "categories": ["business", "productivity"],
+    "lang": "en-US",
     "icons": [
         {
             "src": "/static/icons/icon-72x72.png?v=3.0",
             "sizes": "72x72",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any maskable"
         },
         {
             "src": "/static/icons/icon-96x96.png?v=3.0",
             "sizes": "96x96",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any maskable"
         },
         {
             "src": "/static/icons/icon-128x128.png?v=3.0",
             "sizes": "128x128",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any maskable"
         },
         {
             "src": "/static/icons/icon-144x144.png?v=3.0",
             "sizes": "144x144",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any maskable"
         },
         {
             "src": "/static/icons/icon-152x152.png?v=3.0",
             "sizes": "152x152",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any maskable"
         },
         {
             "src": "/static/icons/icon-192x192.png?v=3.0",
             "sizes": "192x192",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any maskable"
         },
         {
             "src": "/static/icons/icon-384x384.png?v=3.0",
             "sizes": "384x384",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any maskable"
         },
         {
             "src": "/static/icons/icon-512x512.png?v=3.0",
             "sizes": "512x512",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "/static/icons/icon-512x512.png?v=3.0",
+            "sizes": "512x512",
+            "type": "image/png",
+            "form_factor": "wide"
         }
     ]
 }
